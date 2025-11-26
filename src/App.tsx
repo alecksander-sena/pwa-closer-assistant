@@ -1,5 +1,12 @@
-import Home from "./pages/Home";
+import React from "react";
+import AIChat from "./AIChat";
 
-export default function App() {
-  return <Home />;
+function App() {
+  return (
+    <div className="p-8">
+      <AIChat />
+    </div>
+  );
 }
+
+export default App;
