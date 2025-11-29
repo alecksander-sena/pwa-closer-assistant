@@ -1,22 +1,64 @@
 // src/services/ia.ts
+import Groq from "groq-sdk";
 import { contextoVendas } from "../data/contexto";
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-function getApiKey() {
-  return import.meta.env.VITE_GROQ_API_KEY;
-}
+const client = new Groq({
+  apiKey: import.meta.env.VITE_GROQ_API_KEY,
+});
 
 /**
- * Simulador de CLIENTE humano (usa system prompt estilo conversa que você mandou)
+ * System prompt do CLOSER (usa o contexto completo dos 7 passos)
  */
-export async function enviarMensagemIA(mensagem: string): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("VITE_GROQ_API_KEY não encontrada em env.");
+const systemPromptCloser = `
+Você é um assistente especialista em VENDAS, CLOSING e no roteiro de 7 passos da Wise Up.
 
-  const systemPrompt = `
+Regras que devem ser seguidas SEMPRE:
+
+1) Suas respostas devem ser:
+- claras
+- objetivas
+- curtas (3–6 linhas)
+- fáceis de entender
+- práticas e diretas
+- sempre usando o contexto de vendas abaixo
+
+2) Siga SEMPRE a ordem dos "7 Passos da Venda". Você deve conduzir a conversa como um closer de verdade, passo a passo.
+- APRESENTAÇÃO - Me apresentar e falar quem indicou!
+- CONEXÃO - Criar rapport e empatia
+- 
+- INVESTIGAÇÃO
+- PROPOSTA DE VALOR
+- TRATAMENTO DE OBJEÇÕES
+- FECHAMENTO
+- PÓS-VENDA
+
+3) Entenda o que o usuário escreveu e responda como um vendedor profissional:
+- crie rapport
+- faça perguntas inteligentes
+- perguntas abertas
+- mantenha o controle da conversa
+- escute ativamente
+- responda com empatia
+- responda às objeções
+- avance o processo de venda
+- não forcar venda caso o queira ou não esteja interessado
+- valide intenções
+- identifique dores, desejos e objeções
+- leve o usuário ao fechamento
+
+4) Nunca ignore o contexto.
+5) Nunca fuja do assunto: **o objetivo é vender o curso de inglês Wise Up**.
+6) Sempre responda com naturalidade, como conversa de WhatsApp.
+
+===== CONTEXTO COMPLETO DOS 7 PASSOS =====
+${contextoVendas}
+`;
+
+/**
+ * System prompt do CLIENTE (simulação)
+ */
+const systemPromptCliente = `
 Você é um cliente brasileiro comum conversando com um closer por ligação.
-
 Seu papel:
 - Responder como uma pessoa comum e desconhecida.
 - Falar com naturalidade: risadas, pausas, gírias leves e reações humanas.
@@ -25,67 +67,52 @@ Seu papel:
 - Apenas responder como o CLIENTE.
 - Sempre seguir o fluxo iniciado pelo closer.
 - Não finalize a conversa sozinho; sempre deixe espaço para continuidade.
+`;
 
-Estilo: respostas curtas e naturais, ex: "Hahaha sério?", "Uhum, entendi", "Meu inglês tá meio parado kkk", etc.
-  `;
+/**
+ * Função principal: envia mensagem para o modelo CLOSER (usa modelo robusto recomendado)
+ * Retorna o texto da IA ou mensagem de erro amigável.
+ */
+export async function enviarMensagem(mensagemUsuario: string): Promise<string> {
+  try {
+    const completion = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile", // modelo recomendado (versão ativa)
+      messages: [
+        { role: "system", content: systemPromptCloser },
+        { role: "user", content: mensagemUsuario },
+      ],
+      temperature: 0.25,
+      max_tokens: 300,
+    });
 
-  const body = {
-    model: "llama3-8b-8192",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: mensagem }
-    ],
-    temperature: 0.8,
-    max_tokens: 300
-  };
-
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content ?? "Erro ao gerar resposta da IA.";
+    // estrutura esperada: completion.choices[0].message.content
+    const resposta = completion?.choices?.[0]?.message?.content;
+    return resposta ?? "Erro: resposta vazia.";
+  } catch (error) {
+    console.error("Erro ao enviar mensagem (Closer):", error);
+    return "Erro ao conectar com a IA.";
+  }
 }
 
 /**
- * Assistente CLOSER que segue os 7 passos usando o contextoVendas (para uso em fluxo real)
+ * Função auxiliar: simula o cliente humano (útil para testes locais)
  */
-export async function enviarParaIA(mensagemDoCliente: string): Promise<string> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("VITE_GROQ_API_KEY não encontrada em env.");
+export async function enviarSimulacaoCliente(mensagem: string): Promise<string> {
+  try {
+    const completion = await client.chat.completions.create({
+      model: "llama-3.1-8b-instant", // modelo leve/rápido para simulações
+      messages: [
+        { role: "system", content: systemPromptCliente },
+        { role: "user", content: mensagem },
+      ],
+      temperature: 0.85,
+      max_tokens: 250,
+    });
 
-  const promptSystem = `
-Você é um closer profissional altamente treinado.
-Sua missão é seguir rigorosamente os 7 passos da venda (Wise Up) presentes no contexto abaixo.
-Seja humano, consultivo e avance passo a passo. Não invente preços sem instrução.
-Contexto: 
-${contextoVendas}
-  `;
-
-  const body = {
-    model: "llama-3.1-70b-versatile",
-    messages: [
-      { role: "system", content: promptSystem },
-      { role: "user", content: mensagemDoCliente }
-    ],
-    temperature: 0.4,
-    max_tokens: 350
-  };
-
-  const res = await fetch(GROQ_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content ?? "❌ Erro ao conectar com a IA.";
+    const resposta = completion?.choices?.[0]?.message?.content;
+    return resposta ?? "Erro: resposta vazia.";
+  } catch (error) {
+    console.error("Erro ao enviar mensagem (Simulação cliente):", error);
+    return "Erro ao conectar com a IA.";
+  }
 }
