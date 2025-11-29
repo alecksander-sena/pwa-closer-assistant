@@ -1,6 +1,6 @@
 // src/App.tsx
 import { useState } from "react";
-import { enviarMensagemIA } from "./services/ia";
+import { enviarMensagem } from "./services/ia";
 
 function App() {
   const [mensagem, setMensagem] = useState("");
@@ -11,7 +11,7 @@ function App() {
     setResposta("Carregando...");
 
     try {
-      const respostaIA = await enviarMensagemIA(mensagem);
+      const respostaIA = await enviarMensagem(mensagem);
       setResposta(respostaIA);
     } catch (error) {
       console.error(error);
