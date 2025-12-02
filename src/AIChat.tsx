@@ -1,37 +1,25 @@
+// src/AIChat.tsx
 import { useState } from "react";
-import { enviarMensagem, enviarSimulacaoCliente } from "./services/ia";
-
-// Tipagem da resposta da IA
-type IAResponse =
-  | string
-  | {
-      text: string;
-      step?: string;
-      suggestion?: string;
-      actions?: string[];
-    };
+import type { IAResponse } from "./services/ia";
+import { enviarMensagemComMeta, enviarSimulacaoCliente } from "./services/ia";
 
 export default function AIChat() {
-  const [messages, setMessages] = useState<
-    { author: string; text: string }[]
-  >([]);
-
+  const [messages, setMessages] = useState<{ author: string; text: string }[]>(
+    []
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"closer" | "simular">("closer");
 
-  // Adiciona mensagens ao chat
   function addMessage(author: string, text: string) {
-    setMessages((prev) => [...prev, { author, text }]);
+    setMessages((p) => [...p, { author, text }]);
   }
 
-  // Envia mensagem para IA
   async function handleSend() {
     if (!input.trim() || loading) return;
 
     const userText = input;
     setInput("");
-
     addMessage("👤 Você", userText);
     setLoading(true);
 
@@ -39,30 +27,24 @@ export default function AIChat() {
       let respostaIA: IAResponse;
 
       if (mode === "closer") {
-        respostaIA = await enviarMensagem(userText);
+        respostaIA = await enviarMensagemComMeta(userText);
       } else {
         respostaIA = await enviarSimulacaoCliente(userText);
       }
 
-      // A resposta pode vir string ou objeto
-      const textoIA =
-        typeof respostaIA === "string"
-          ? respostaIA
-          : respostaIA?.text ?? "Sem resposta.";
-
-      addMessage("🤖 IA", textoIA);
-    } catch (error) {
+      addMessage("🤖 IA", respostaIA.text ?? "Sem resposta.");
+    } catch (err) {
+      console.error("AIChat error:", err);
       addMessage("⚠️ Erro", "Não foi possível conectar à IA.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (
     <div style={styles.container}>
       <h2>Assistente IA</h2>
 
-      {/* Seletor de modo */}
       <div style={styles.modeSwitch}>
         <button
           onClick={() => setMode("closer")}
@@ -73,7 +55,6 @@ export default function AIChat() {
         >
           Modo Closer
         </button>
-
         <button
           onClick={() => setMode("simular")}
           style={{
@@ -85,22 +66,17 @@ export default function AIChat() {
         </button>
       </div>
 
-      {/* Área de mensagens */}
       <div style={styles.chatBox}>
         {messages.map((m, i) => (
           <div key={i} style={styles.message}>
-            <strong>{m.author}: </strong> {m.text}
+            <strong>{m.author}: </strong>
+            <span>{m.text}</span>
           </div>
         ))}
 
-        {loading && (
-          <div style={styles.loading}>
-            Digitando...
-          </div>
-        )}
+        {loading && <div style={styles.loading}>Digitando...</div>}
       </div>
 
-      {/* Input */}
       <div style={styles.inputRow}>
         <input
           value={input}
@@ -117,16 +93,8 @@ export default function AIChat() {
   );
 }
 
-// ---------------------
-// Estilos inline
-// ---------------------
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: "600px",
-    margin: "0 auto",
-    padding: "20px",
-    fontFamily: "sans-serif",
-  },
+  container: { maxWidth: "600px", margin: "0 auto", padding: "20px" },
   chatBox: {
     height: "400px",
     overflowY: "auto",
@@ -136,44 +104,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "10px",
     border: "1px solid #ddd",
   },
-  message: {
-    marginBottom: "10px",
-  },
-  loading: {
-    fontStyle: "italic",
-    opacity: 0.7,
-  },
-  inputRow: {
-    display: "flex",
-    gap: "10px",
-  },
-  input: {
-    flex: 1,
-    padding: "10px",
-    fontSize: "16px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-  },
-  sendBtn: {
-    padding: "10px 20px",
-    background: "#27ae60",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  modeSwitch: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "12px",
-  },
-  modeBtn: {
-    flex: 1,
-    padding: "10px",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
+  message: { marginBottom: "10px" },
+  loading: { fontStyle: "italic", opacity: 0.7 },
+  inputRow: { display: "flex", gap: "10px" },
+  input: { flex: 1, padding: "10px", fontSize: 16, borderRadius: 8, border: "1px solid #ccc" },
+  sendBtn: { padding: "10px 20px", background: "#27ae60", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" },
+  modeSwitch: { display: "flex", gap: "10px", marginBottom: 12 },
+  modeBtn: { flex: 1, padding: 10, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: "bold" },
 };
