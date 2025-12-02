@@ -1,114 +1,143 @@
 // src/AIChat.tsx
-import { useState } from "react";
-import type { IAResponse } from "./services/ia";
-import { enviarMensagemComMeta, enviarSimulacaoCliente } from "./services/ia";
+import { useState, useRef, useEffect } from "react";
+import { callIAForDual } from "./services/ia";
 
 export default function AIChat() {
-  const [messages, setMessages] = useState<{ author: string; text: string }[]>(
-    []
-  );
+  const [messages, setMessages] = useState<
+    { author: string; text: string }[]
+  >([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"closer" | "simular">("closer");
+
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function addMessage(author: string, text: string) {
-    setMessages((p) => [...p, { author, text }]);
+    setMessages((prev) => [...prev, { author, text }]);
   }
 
   async function handleSend() {
-    if (!input.trim() || loading) return;
+    const content = input.trim();
+    if (!content || loading) return;
 
-    const userText = input;
     setInput("");
-    addMessage("👤 Você", userText);
+    addMessage("Você", content);
     setLoading(true);
 
     try {
-      let respostaIA: IAResponse;
-
-      if (mode === "closer") {
-        respostaIA = await enviarMensagemComMeta(userText);
-      } else {
-        respostaIA = await enviarSimulacaoCliente(userText);
-      }
-
-      addMessage("🤖 IA", respostaIA.text ?? "Sem resposta.");
+      const dual = await callIAForDual(content);
+      // Adiciona as duas respostas no histórico: cliente e depois closer (ou vice-versa)
+      addMessage("Cliente (simulado)", dual.client.text);
+      addMessage("Closer (o que dizer)", dual.closer.text);
     } catch (err) {
-      console.error("AIChat error:", err);
-      addMessage("⚠️ Erro", "Não foi possível conectar à IA.");
+      console.error("Erro ao chamar IA:", err);
+      addMessage("Erro", "Não foi possível conectar à IA.");
     } finally {
       setLoading(false);
     }
   }
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
   return (
-    <div style={styles.container}>
-      <h2>Assistente IA</h2>
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <h2 style={styles.title}>Assistente Closer</h2>
 
-      <div style={styles.modeSwitch}>
-        <button
-          onClick={() => setMode("closer")}
-          style={{
-            ...styles.modeBtn,
-            background: mode === "closer" ? "#2ecc71" : "#bdc3c7",
-          }}
-        >
-          Modo Closer
-        </button>
-        <button
-          onClick={() => setMode("simular")}
-          style={{
-            ...styles.modeBtn,
-            background: mode === "simular" ? "#3498db" : "#bdc3c7",
-          }}
-        >
-          Simular Cliente
-        </button>
-      </div>
+        <div style={styles.chatBox}>
+          {messages.map((m, i) => (
+            <div key={i} style={styles.message}>
+              <div style={styles.author}>{m.author}</div>
+              <div style={styles.text}>{m.text}</div>
+            </div>
+          ))}
+          {loading && <div style={styles.typing}>Digitando...</div>}
+          <div ref={bottomRef} />
+        </div>
 
-      <div style={styles.chatBox}>
-        {messages.map((m, i) => (
-          <div key={i} style={styles.message}>
-            <strong>{m.author}: </strong>
-            <span>{m.text}</span>
-          </div>
-        ))}
-
-        {loading && <div style={styles.loading}>Digitando...</div>}
-      </div>
-
-      <div style={styles.inputRow}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Digite sua mensagem..."
-          style={styles.input}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-        />
-        <button onClick={handleSend} style={styles.sendBtn}>
-          Enviar
-        </button>
+        <div style={styles.inputRow}>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Digite o que você diria na ligação..."
+            style={styles.textarea}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          <button onClick={handleSend} style={styles.sendBtn} disabled={loading}>
+            {loading ? "Enviando..." : "Enviar"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { maxWidth: "600px", margin: "0 auto", padding: "20px" },
-  chatBox: {
-    height: "400px",
-    overflowY: "auto",
-    background: "#f4f4f4",
-    padding: "10px",
-    borderRadius: "8px",
-    marginBottom: "10px",
-    border: "1px solid #ddd",
+  page: {
+    minHeight: "100vh",
+    background: "#0f1115",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    color: "#e6eef8",
   },
-  message: { marginBottom: "10px" },
-  loading: { fontStyle: "italic", opacity: 0.7 },
-  inputRow: { display: "flex", gap: "10px" },
-  input: { flex: 1, padding: "10px", fontSize: 16, borderRadius: 8, border: "1px solid #ccc" },
-  sendBtn: { padding: "10px 20px", background: "#27ae60", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" },
-  modeSwitch: { display: "flex", gap: "10px", marginBottom: 12 },
-  modeBtn: { flex: 1, padding: 10, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: "bold" },
+  container: {
+    width: "100%",
+    maxWidth: 900,
+    borderRadius: 12,
+    padding: 20,
+    background: "linear-gradient(180deg, #0b0c0f 0%, #121416 100%)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+  },
+  title: { margin: 0, marginBottom: 14, color: "#cfe8ff" },
+  chatBox: {
+    maxHeight: 520,
+    overflowY: "auto",
+    padding: 12,
+    borderRadius: 8,
+    background: "#0b0d11",
+    border: "1px solid rgba(255,255,255,0.03)",
+    marginBottom: 12,
+  },
+  message: { marginBottom: 12 },
+  author: { fontWeight: "700", color: "#a7d1ff", marginBottom: 6 },
+  text: {
+    background: "rgba(255,255,255,0.03)",
+    padding: 12,
+    borderRadius: 8,
+    lineHeight: 1.45,
+    color: "#e6eef8",
+  },
+  typing: { fontStyle: "italic", opacity: 0.7, marginTop: 6, color: "#9fbff8" },
+  inputRow: { display: "flex", gap: 10, marginTop: 8 },
+  textarea: {
+    flex: 1,
+    minHeight: 72,
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.04)",
+    background: "#091014",
+    color: "#e6eef8",
+    resize: "vertical",
+    fontSize: 15,
+  },
+  sendBtn: {
+    minWidth: 110,
+    background: "linear-gradient(180deg,#1f8ef1,#165db6)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    padding: "12px 14px",
+    fontWeight: 700,
+  },
 };
