@@ -1,34 +1,42 @@
 import { useState } from "react";
-import {
-  enviarMensagem,
-  enviarSimulacaoCliente,
-} from "./services/ia";
+import { enviarMensagem, enviarSimulacaoCliente } from "./services/ia";
+
+// Tipagem da resposta da IA
+type IAResponse =
+  | string
+  | {
+      text: string;
+      step?: string;
+      suggestion?: string;
+      actions?: string[];
+    };
 
 export default function AIChat() {
   const [messages, setMessages] = useState<
     { author: string; text: string }[]
   >([]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"closer" | "simular">("closer");
 
-  // Adiciona mensagens na tela
+  // Adiciona mensagens ao chat
   function addMessage(author: string, text: string) {
     setMessages((prev) => [...prev, { author, text }]);
   }
 
-  // Enviar mensagem para a IA
+  // Envia mensagem para IA
   async function handleSend() {
     if (!input.trim() || loading) return;
 
     const userText = input;
     setInput("");
-    addMessage("👤 Você", userText);
 
+    addMessage("👤 Você", userText);
     setLoading(true);
 
     try {
-      let respostaIA;
+      let respostaIA: IAResponse;
 
       if (mode === "closer") {
         respostaIA = await enviarMensagem(userText);
@@ -36,8 +44,11 @@ export default function AIChat() {
         respostaIA = await enviarSimulacaoCliente(userText);
       }
 
-      // A resposta vem como: { text, step, suggestion, actions }
-      const textoIA = respostaIA?.text ?? "Sem resposta.";
+      // A resposta pode vir string ou objeto
+      const textoIA =
+        typeof respostaIA === "string"
+          ? respostaIA
+          : respostaIA?.text ?? "Sem resposta.";
 
       addMessage("🤖 IA", textoIA);
     } catch (error) {
@@ -74,7 +85,7 @@ export default function AIChat() {
         </button>
       </div>
 
-      {/* Mensagens */}
+      {/* Área de mensagens */}
       <div style={styles.chatBox}>
         {messages.map((m, i) => (
           <div key={i} style={styles.message}>
@@ -83,7 +94,9 @@ export default function AIChat() {
         ))}
 
         {loading && (
-          <div style={styles.loading}>Digitando...</div>
+          <div style={styles.loading}>
+            Digitando...
+          </div>
         )}
       </div>
 
@@ -105,7 +118,7 @@ export default function AIChat() {
 }
 
 // ---------------------
-// Estilos inline simples
+// Estilos inline
 // ---------------------
 const styles: Record<string, React.CSSProperties> = {
   container: {
