@@ -1,151 +1,166 @@
-// src/AIChat.tsx
-import { useEffect, useRef, useState } from "react";
-import { enviarMensagem, enviarSimulacaoCliente } from "./services/ia";
-
-type Msg = { id: string; author: "user" | "ia"; text: string; time: string };
+import { useState } from "react";
+import {
+  enviarMensagem,
+  enviarSimulacaoCliente,
+} from "./services/ia";
 
 export default function AIChat() {
+  const [messages, setMessages] = useState<
+    { author: string; text: string }[]
+  >([]);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Msg[]>(() => {
-    try {
-      const raw = localStorage.getItem("chat_history");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"simular" | "closer">("simular");
-  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [mode, setMode] = useState<"closer" | "simular">("closer");
 
-  useEffect(() => {
-    localStorage.setItem("chat_history", JSON.stringify(messages));
-    boxRef.current?.scrollTo({ top: boxRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
-
-  function pushMessage(author: Msg["author"], text: string) {
-    const m: Msg = {
-      id: String(Date.now()) + Math.random(),
-      author,
-      text,
-      time: new Date().toISOString()
-    };
-    setMessages((s) => [...s, m]);
-    return m;
+  // Adiciona mensagens na tela
+  function addMessage(author: string, text: string) {
+    setMessages((prev) => [...prev, { author, text }]);
   }
 
-  async function sendMessageText(text: string) {
-    if (!text.trim()) return;
-    pushMessage("user", text);
+  // Enviar mensagem para a IA
+  async function handleSend() {
+    if (!input.trim() || loading) return;
+
+    const userText = input;
     setInput("");
+    addMessage("👤 Você", userText);
+
     setLoading(true);
 
     try {
-      const resposta =
-        mode === "simular"
-          ? await enviarSimulacaoCliente(text)
-          : await enviarMensagem(text);
+      let respostaIA;
 
-      pushMessage("ia", resposta);
-    } catch (err) {
-      pushMessage("ia", "Erro ao conectar com a IA.");
-      console.error(err);
-    } finally {
-      setLoading(false);
+      if (mode === "closer") {
+        respostaIA = await enviarMensagem(userText);
+      } else {
+        respostaIA = await enviarSimulacaoCliente(userText);
+      }
+
+      // A resposta vem como: { text, step, suggestion, actions }
+      const textoIA = respostaIA?.text ?? "Sem resposta.";
+
+      addMessage("🤖 IA", textoIA);
+    } catch (error) {
+      addMessage("⚠️ Erro", "Não foi possível conectar à IA.");
     }
-  }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessageText(input);
-    }
-  }
-
-  function clearHistory() {
-    setMessages([]);
-    localStorage.removeItem("chat_history");
-  }
-
-  function downloadHistory() {
-    const blob = new Blob([JSON.stringify(messages, null, 2)], {
-      type: "application/json"
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `chat-history-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setLoading(false);
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-xl font-bold flex-1">Assistente IA — Teste</h2>
+    <div style={styles.container}>
+      <h2>Assistente IA</h2>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMode("simular")}
-            className={`px-3 py-1 rounded ${mode === "simular" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-          >
-            Simular Cliente
-          </button>
-          <button
-            onClick={() => setMode("closer")}
-            className={`px-3 py-1 rounded ${mode === "closer" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-          >
-            Modo Closer
-          </button>
-        </div>
+      {/* Seletor de modo */}
+      <div style={styles.modeSwitch}>
+        <button
+          onClick={() => setMode("closer")}
+          style={{
+            ...styles.modeBtn,
+            background: mode === "closer" ? "#2ecc71" : "#bdc3c7",
+          }}
+        >
+          Modo Closer
+        </button>
+
+        <button
+          onClick={() => setMode("simular")}
+          style={{
+            ...styles.modeBtn,
+            background: mode === "simular" ? "#3498db" : "#bdc3c7",
+          }}
+        >
+          Simular Cliente
+        </button>
       </div>
 
-      <div ref={boxRef} className="h-[60vh] overflow-y-auto p-4 bg-white border rounded">
-        {messages.length === 0 && <div className="text-gray-400">Nenhuma mensagem — comece digitando.</div>}
-        {messages.map((m) => (
-          <div key={m.id} className={`mb-3 flex ${m.author === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`p-3 rounded-lg max-w-[75%] ${
-                m.author === "user" ? "bg-blue-600 text-white" : "bg-gray-100"
-              }`}
-            >
-              <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
-              <div className="text-xs text-gray-500 mt-1">{new Date(m.time).toLocaleString()}</div>
-            </div>
+      {/* Mensagens */}
+      <div style={styles.chatBox}>
+        {messages.map((m, i) => (
+          <div key={i} style={styles.message}>
+            <strong>{m.author}: </strong> {m.text}
           </div>
         ))}
-        {loading && <div className="text-gray-500">IA respondendo...</div>}
+
+        {loading && (
+          <div style={styles.loading}>Digitando...</div>
+        )}
       </div>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          sendMessageText(input);
-        }}
-        className="mt-4 flex gap-2"
-      >
-        <textarea
+      {/* Input */}
+      <div style={styles.inputRow}>
+        <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={2}
-          placeholder="Digite sua fala... (Enter envia, Shift+Enter nova linha)"
-          className="flex-1 border p-2 rounded resize-none"
+          placeholder="Digite sua mensagem..."
+          style={styles.input}
+          onKeyDown={(e) => e.key === "Enter" && handleSend()}
         />
-
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button onClick={handleSend} style={styles.sendBtn}>
           Enviar
-        </button>
-      </form>
-
-      <div className="mt-3 flex gap-2">
-        <button onClick={clearHistory} className="px-3 py-1 bg-gray-200 rounded">
-          Limpar histórico
-        </button>
-        <button onClick={downloadHistory} className="px-3 py-1 bg-gray-200 rounded">
-          Exportar (JSON)
         </button>
       </div>
     </div>
   );
 }
+
+// ---------------------
+// Estilos inline simples
+// ---------------------
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    maxWidth: "600px",
+    margin: "0 auto",
+    padding: "20px",
+    fontFamily: "sans-serif",
+  },
+  chatBox: {
+    height: "400px",
+    overflowY: "auto",
+    background: "#f4f4f4",
+    padding: "10px",
+    borderRadius: "8px",
+    marginBottom: "10px",
+    border: "1px solid #ddd",
+  },
+  message: {
+    marginBottom: "10px",
+  },
+  loading: {
+    fontStyle: "italic",
+    opacity: 0.7,
+  },
+  inputRow: {
+    display: "flex",
+    gap: "10px",
+  },
+  input: {
+    flex: 1,
+    padding: "10px",
+    fontSize: "16px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+  },
+  sendBtn: {
+    padding: "10px 20px",
+    background: "#27ae60",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+  },
+  modeSwitch: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "12px",
+  },
+  modeBtn: {
+    flex: 1,
+    padding: "10px",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+};

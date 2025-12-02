@@ -7,86 +7,84 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const API_KEY = process.env.GROQ_API_KEY;
+// procura pela variável de ambiente (use GROQ_API_KEY ou VITE_GROQ_API_KEY)
+const API_KEY = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 if (!API_KEY) {
-  console.error("GROQ_API_KEY missing. Set environment variable GROQ_API_KEY.");
+  console.error("ERRO: variável de ambiente GROQ_API_KEY (ou VITE_GROQ_API_KEY) não encontrada.");
   process.exit(1);
 }
 
 const client = new Groq({ apiKey: API_KEY });
 
+// system prompts curtos (o contexto completo ficará no frontend/data)
+const systemPromptCloserShort = `Você é um assistente especialista em VENDAS (closer).
+Siga os 7 passos da venda, responda curto (3-6 linhas), objetivamente e de forma consultiva.`;
+
+const systemPromptClienteShort = `Você é um cliente brasileiro comum. Responda natural, com pausas, dúvidas e sem citar preços.`;
+
 /**
- * Rota que recebe:
- * { message: string, mode: "closer" | "simular" }
- * Retorna JSON com esquema:
- * { text, step, suggestion, actions }
+ * Função utilitária: tenta parsear JSON, senão devolve objeto com text bruto.
+ */
+function safeParseModelOutput(raw) {
+  if (!raw || typeof raw !== "string") return { text: "" };
+  // tenta detectar se o modelo já devolveu JSON
+  try {
+    const parsed = JSON.parse(raw);
+    // se for objeto com text, step etc, retorna direto
+    if (typeof parsed === "object" && parsed !== null) return parsed;
+  } catch (e) {
+    // não é JSON — segue abaixo
+  }
+
+  // fallback: monta um JSON simples
+  return {
+    text: raw,
+    step: null,
+    suggestion: null,
+    actions: []
+  };
+}
+
+/**
+ * Endpoint universal /api/ia
+ * Body esperado:
+ * { message: string, mode?: "closer"|"cliente" }
+ *
+ * Resposta: JSON com { text, step, suggestion, actions }
  */
 app.post("/api/ia", async (req, res) => {
   try {
-    const { message = "", mode = "closer" } = req.body;
+    const { message, mode } = req.body ?? {};
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "Campo 'message' obrigatório (string)." });
+    }
 
-    // system prompts (closer uses contexto completo)
-    const systemCloser = `
-Você é um assistente especialista em VENDAS, CLOSING e no roteiro de 7 passos da Wise Up.
-(use o contexto de vendas e sempre guie passo-a-passo).
-IMPORTANTE: Responda **somente** como JSON (sem comentário adicional). O JSON precisa ter as chaves:
-{
-  "text": "<resposta curta que o closer deve dizer ao cliente>",
-  "step": "<número ou nome do passo atual - ex: 1 | APRESENTAÇÃO>",
-  "suggestion": "<uma frase curta: O QUE eu devo dizer AGORA (1-5 linhas)>",
-  "actions": ["ask_decisor","ask_schedule","present_product","ask_price_opinion", ...] // opcional
-}
-Use linguagem natural e curta. Use o contexto (o closer já sabe o produto).
-`;
+    const system = mode === "cliente" ? systemPromptClienteShort : systemPromptCloserShort;
 
-    const systemCliente = `
-Você é um cliente brasileiro comum em uma ligação. Responda naturalmente (gírias leves, pausas).
-Não gere JSON — para simulação, retorne texto simples de cliente (vai ser mostrado como "cliente falou").
-`;
-
-    const system = mode === "closer" ? systemCloser : systemCliente;
+    // escolha do modelo (use um modelo ativo / disponível)
+    const model = mode === "cliente" ? "llama-3.1-8b-instant" : "llama-3.3-70b-versatile";
 
     const completion = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: message }
       ],
-      temperature: mode === "closer" ? 0.25 : 0.8,
-      max_tokens: 350
+      temperature: mode === "cliente" ? 0.85 : 0.25,
+      max_tokens: mode === "cliente" ? 250 : 400
     });
 
-    const raw = completion?.choices?.[0]?.message?.content;
-    if (!raw) return res.status(500).json({ error: "Empty response from model" });
+    // tentar obter o texto de resposta
+    const modelText = completion?.choices?.[0]?.message?.content;
+    const jsonResponse = safeParseModelOutput(modelText);
 
-    // If mode is closer, model must return JSON. Try parse; otherwise send raw.
-    if (mode === "closer") {
-      try {
-        // make sure we extract JSON block if model wrapped it inside backticks or text
-        const firstBrace = raw.indexOf("{");
-        const lastBrace = raw.lastIndexOf("}");
-        const jsonText = firstBrace >= 0 && lastBrace > firstBrace ? raw.slice(firstBrace, lastBrace + 1) : raw;
-        const parsed = JSON.parse(jsonText);
-        return res.json(parsed);
-      } catch (err) {
-        console.error("Failed to parse JSON from model:", err, "raw:", raw);
-        // fallback: wrap raw into expected shape
-        return res.json({
-          text: typeof raw === "string" ? raw : String(raw),
-          step: "unknown",
-          suggestion: "Repita a pergunta ou peça mais informações.",
-          actions: []
-        });
-      }
-    } else {
-      // simulação cliente -> just return text
-      return res.json({ text: raw });
-    }
+    return res.json(jsonResponse);
   } catch (err) {
-    console.error("Erro na API:", err);
-    res.status(500).json({ error: "Erro no servidor da IA" });
+    console.error("Erro na rota /api/ia:", err);
+    // devolve mensagem amigável pro frontend
+    return res.status(500).json({ error: "Erro no servidor da IA" });
   }
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log("Servidor IA rodando na porta " + PORT));
+app.listen(PORT, () => console.log(`Servidor IA rodando na porta ${PORT}`));
