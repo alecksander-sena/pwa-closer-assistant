@@ -6,19 +6,23 @@ export type IAResponse = {
   actions?: string[];
 };
 
+export type DualResponse = {
+  closer: IAResponse;
+  client: IAResponse;
+};
+
 const API_URL = (import.meta.env.VITE_API_URL as string) || "http://localhost:3001";
 
-async function fetchJson(url: string, body: unknown) {
+async function postJSON(url: string, body: unknown) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
 
   const text = await res.text();
 
   if (!res.ok) {
-    // tenta parsear JSON da resposta de erro, senão lança o texto cru
     try {
       const parsed = JSON.parse(text);
       throw new Error(parsed.error || JSON.stringify(parsed));
@@ -30,51 +34,21 @@ async function fetchJson(url: string, body: unknown) {
   try {
     return JSON.parse(text);
   } catch {
-    // se não for JSON, retornar a string pura
     return text;
   }
 }
 
-export async function callIA(
-  message: string,
-  mode: "closer" | "simular" = "closer"
-): Promise<IAResponse> {
+export async function callIAForDual(message: string): Promise<DualResponse> {
   const url = `${API_URL}/api/ia`;
+  const data = await postJSON(url, { message });
 
-  const data = await fetchJson(url, { message, mode });
-
-  // Normalização:
-  if (typeof data === "string") {
-    return {
-      text: data,
-      step: "unknown",
-      suggestion: "",
-      actions: [],
-    };
-  }
-
+  // Normalizar
   return {
-    text: (data && data.text) ?? "",
-    step: (data && data.step) ?? "unknown",
-    suggestion: (data && data.suggestion) ?? "",
-    actions: Array.isArray(data?.actions) ? data.actions : [],
+    closer: {
+      text: (data?.closer?.text ?? String(data?.closer ?? "")) as string
+    },
+    client: {
+      text: (data?.client?.text ?? String(data?.client ?? "")) as string
+    }
   };
-}
-
-// Exportações públicas (consistentes)
-export async function enviarMensagem(texto: string): Promise<IAResponse> {
-  return callIA(texto, "closer");
-}
-
-export async function enviarMensagemComMeta(texto: string): Promise<IAResponse> {
-  return callIA(texto, "closer");
-}
-
-export async function enviarSimulacaoCliente(texto: string): Promise<IAResponse> {
-  return callIA(texto, "simular");
-}
-
-export async function enviarMensagemTexto(texto: string): Promise<string> {
-  const r = await callIA(texto, "closer");
-  return r.text;
 }

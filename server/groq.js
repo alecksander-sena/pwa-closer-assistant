@@ -18,7 +18,7 @@ const client = new Groq({ apiKey: API_KEY });
 
 // system prompts curtos (o contexto completo ficará no frontend/data)
 const systemPromptCloserShort = `Você é um assistente especialista em VENDAS (closer).
-Siga os 7 passos da venda, responda curto (3-6 linhas), objetivamente e de forma consultiva.`;
+Siga os 7 passos da venda, responda curto (1-6 linhas), objetivamente e de forma consultiva.`;
 
 const systemPromptClienteShort = `Você é um cliente brasileiro comum. Responda natural, com pausas, dúvidas e sem citar preços.`;
 
