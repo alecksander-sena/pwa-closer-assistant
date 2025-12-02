@@ -1,6 +1,6 @@
 // src/AIChat.tsx
 import { useState, useRef, useEffect } from "react";
-import { callIAForDual } from "./services/ia";
+import { enviarMensagemIA } from "./services/ia";
 
 export default function AIChat() {
   const [messages, setMessages] = useState<
@@ -25,10 +25,10 @@ export default function AIChat() {
     setLoading(true);
 
     try {
-      const dual = await callIAForDual(content);
-      // Adiciona as duas respostas no histórico: cliente e depois closer (ou vice-versa)
-      addMessage("Cliente (simulado)", dual.client.text);
-      addMessage("Closer (o que dizer)", dual.closer.text);
+      // Chamada real para IA
+      const resposta = await enviarMensagemIA(content);
+
+      addMessage("IA", resposta);
     } catch (err) {
       console.error("Erro ao chamar IA:", err);
       addMessage("Erro", "Não foi possível conectar à IA.");
@@ -53,7 +53,8 @@ export default function AIChat() {
               <div style={styles.text}>{m.text}</div>
             </div>
           ))}
-          {loading && <div style={styles.typing}>Digitando...</div>}
+
+          {loading && <div style={styles.typing}>IA digitando…</div>}
           <div ref={bottomRef} />
         </div>
 
@@ -62,7 +63,7 @@ export default function AIChat() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Digite o que você diria na ligação..."
+            placeholder="Digite o que você diria na ligação…"
             style={styles.textarea}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -71,7 +72,12 @@ export default function AIChat() {
               }
             }}
           />
-          <button onClick={handleSend} style={styles.sendBtn} disabled={loading}>
+
+          <button
+            onClick={handleSend}
+            style={styles.sendBtn}
+            disabled={loading}
+          >
             {loading ? "Enviando..." : "Enviar"}
           </button>
         </div>
@@ -90,6 +96,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 20,
     color: "#e6eef8",
   },
+
   container: {
     width: "100%",
     maxWidth: 900,
@@ -97,8 +104,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 20,
     background: "linear-gradient(180deg, #0b0c0f 0%, #121416 100%)",
     boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+    border: "1px solid rgba(255,255,255,0.06)",
   },
-  title: { margin: 0, marginBottom: 14, color: "#cfe8ff" },
+
+  title: {
+    margin: 0,
+    marginBottom: 14,
+    color: "#cfe8ff",
+    fontSize: 22,
+    fontWeight: "700",
+    textShadow: "0 0 6px rgba(80,150,255,0.6)",
+  },
+
   chatBox: {
     maxHeight: 520,
     overflowY: "auto",
@@ -108,17 +125,34 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.03)",
     marginBottom: 12,
   },
+
   message: { marginBottom: 12 },
-  author: { fontWeight: "700", color: "#a7d1ff", marginBottom: 6 },
+
+  author: {
+    fontWeight: "700",
+    color: "#77b4ff",
+    marginBottom: 6,
+    fontSize: 13,
+  },
+
   text: {
-    background: "rgba(255,255,255,0.03)",
+    background: "rgba(255,255,255,0.05)",
     padding: 12,
     borderRadius: 8,
     lineHeight: 1.45,
     color: "#e6eef8",
+    border: "1px solid rgba(255,255,255,0.04)",
   },
-  typing: { fontStyle: "italic", opacity: 0.7, marginTop: 6, color: "#9fbff8" },
+
+  typing: {
+    fontStyle: "italic",
+    opacity: 0.7,
+    marginTop: 6,
+    color: "#9fbff8",
+  },
+
   inputRow: { display: "flex", gap: 10, marginTop: 8 },
+
   textarea: {
     flex: 1,
     minHeight: 72,
@@ -129,7 +163,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#e6eef8",
     resize: "vertical",
     fontSize: 15,
+    outline: "none",
   },
+
   sendBtn: {
     minWidth: 110,
     background: "linear-gradient(180deg,#1f8ef1,#165db6)",
@@ -139,5 +175,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 14px",
     fontWeight: 700,
+    transition: "0.2s",
   },
 };
