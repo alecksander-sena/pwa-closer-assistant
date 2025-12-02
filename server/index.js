@@ -17,17 +17,18 @@ if (!GROQ_API_KEY) {
 
 const client = new Groq({ apiKey: GROQ_API_KEY });
 
-// Prompts
-const systemCloser = `
-Você é um especialista CLOSER profissional.
-Siga sempre os 7 passos da venda.
-Responda curto, claro, objetivo e aplicável a uma ligação real.
-`;
+// -----------------------------------------
+// System prompts — ajustáveis
+// -----------------------------------------
+const systemCloser = `Você é um especialista CLOSER. Seu objetivo: guiar o vendedor passo a passo pelo processo de venda (7 passos).
+- Responda com instruções curtas e objetivas para o vendedor dizer ao cliente.
+- Sempre siga a estrutura "Passo X - [descrição curta]".
+- Se for uma fala direta ao cliente, comece com: Diga ao cliente: "..."
+- Em caso de objeção, use: Objeção — diga: "..."
+- Respostas curtas (1 a 3 frases), práticas para ligação.`;
 
-const systemClient = `
-Você é um cliente brasileiro comum.
-Responda de forma natural, com dúvidas, receios e curiosidade.
-`;
+const systemClient = `Você é um CLIENTE simulado. Responda como uma pessoa real (curto, direto, com dúvidas ou objeções naturais). 
+Às vezes interessado, às vezes desconfiado, às vezes apressado. Siga a coerência da fala do vendedor.`;
 
 // Função para chamar modelo
 async function callGroq(system, userMessage, model, temperature) {
