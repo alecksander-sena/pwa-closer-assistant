@@ -3,9 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { enviarMensagemIA } from "./services/ia";
 
 export default function AIChat() {
-  const [messages, setMessages] = useState<
-    { author: string; text: string }[]
-  >([]);
+  const [messages, setMessages] = useState<{ author: string; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -13,7 +11,7 @@ export default function AIChat() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function addMessage(author: string, text: string) {
-    setMessages((prev) => [...prev, { author, text }]);
+    setMessages(prev => [...prev, { author, text }]);
   }
 
   async function handleSend() {
@@ -25,10 +23,17 @@ export default function AIChat() {
     setLoading(true);
 
     try {
-      // Chamada real para IA
+      // Chamada para IA
       const resposta = await enviarMensagemIA(content);
 
-      addMessage("IA", resposta);
+      // GARANTIA: nunca quebra a UI se a API falhar
+      const closerText = resposta?.closer?.text || "Erro ao gerar resposta do closer.";
+      const clientText = resposta?.client?.text || "Erro ao gerar resposta do cliente.";
+
+      // Exibe os dois: Closer e Cliente Simulado
+      addMessage("Closer", closerText);
+      addMessage("Cliente", clientText);
+
     } catch (err) {
       console.error("Erro ao chamar IA:", err);
       addMessage("Erro", "Não foi possível conectar à IA.");
