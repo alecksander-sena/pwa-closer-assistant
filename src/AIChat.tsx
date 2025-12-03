@@ -49,7 +49,7 @@ export default function AIChat() {
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <h2 style={styles.title}>Assistente Closer</h2>
+        <h2 style={styles.title}>Alecksander Assistente Closer WSP</h2>
 
         <div style={styles.chatBox}>
           {messages.map((m, i) => (

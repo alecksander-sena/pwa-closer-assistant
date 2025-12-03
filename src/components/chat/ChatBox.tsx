@@ -60,7 +60,7 @@ export default function ChatBox() {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-violet-500 shadow-neon flex items-center justify-center text-black font-bold">AI</div>
           <div>
-            <div className="text-lg font-semibold">Assistente Closer</div>
+            <div className="text-lg font-semibold">Alecksander Assistente Closer WSP</div>
             <div className="text-xs text-slate-400">Simule clientes e receba scripts prontos</div>
           </div>
         </div>
