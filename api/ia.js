@@ -182,8 +182,8 @@ Seja criativo e autêntico, como uma pessoa real faria em uma ligação.`;
 
 
     // MODELOS
-    const CLOSER_MODEL = "llama3-70b-8192";
-    const CLIENT_MODEL = "llama3-8b-8192";
+    const CLOSER_MODEL = process.env.GROQ_MODEL_CLOSER;
+    const CLIENT_MODEL = process.env.GROQ_MODEL_CLIENT;
 
     // CHAMADAS PARA OS DOIS MODELOS (com fallback seguro)
     const generate = async (model, system, msg, temp, maxTokens) => {
