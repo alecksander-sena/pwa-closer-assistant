@@ -23,16 +23,12 @@ export default function AIChat() {
     setLoading(true);
 
     try {
-      // Chamada para IA
+      // Chama IA normalmente
       const resposta = await enviarMensagemIA(content);
 
-      // GARANTIA: nunca quebra a UI se a API falhar
+      // SOMENTE o closer é exibido agora
       const closerText = resposta?.closer?.text || "Erro ao gerar resposta do closer.";
-      const clientText = resposta?.client?.text || "Erro ao gerar resposta do cliente.";
-
-      // Exibe os dois: Closer e Cliente Simulado
       addMessage("Closer", closerText);
-      addMessage("Cliente", clientText);
 
     } catch (err) {
       console.error("Erro ao chamar IA:", err);
@@ -116,8 +112,8 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     marginBottom: 14,
     color: "#cfe8ff",
-    fontSize: 22,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: "800",
     textShadow: "0 0 6px rgba(80,150,255,0.6)",
   },
 
@@ -131,20 +127,21 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
   },
 
-  message: { marginBottom: 12 },
+  message: { marginBottom: 16 },
 
   author: {
     fontWeight: "700",
     color: "#77b4ff",
     marginBottom: 6,
-    fontSize: 13,
+    fontSize: 14,
   },
 
   text: {
-    background: "rgba(255,255,255,0.05)",
-    padding: 12,
+    background: "rgba(255,255,255,0.08)",
+    padding: 16,
     borderRadius: 8,
-    lineHeight: 1.45,
+    lineHeight: 1.55,
+    fontSize: 17, // 🔥 Texto maior e mais confortável
     color: "#e6eef8",
     border: "1px solid rgba(255,255,255,0.04)",
   },
