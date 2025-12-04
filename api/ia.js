@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const API_KEY = process.env.GROQ_API_KEY;
 
     if (!API_KEY) {
-      console.error("❌ ERRO: GROQ_API_KEY não configurada no ambiente.");
+      console.error("❌ ERRO: GROQ_API_KEY não configurada.");
       return res.status(500).json({
         error: "API Key da IA não configurada no servidor."
       });
@@ -26,11 +26,27 @@ export default async function handler(req, res) {
 
     const client = new Groq({ apiKey: API_KEY });
 
-    // -----------------------------
-    // NÃO ALTEREI NADA DAQUI
-    // -----------------------------
-    const systemCloser = `
-# Instruções para o modelo atuar como CLOSER
+    // PROMPT DO CLIENTE (simulação)
+    const systemClient = `
+Você é um cliente SIMULADO, realista, direto, responde curto,
+às vezes com dúvidas ou objeções.
+Não elogie o vendedor. Seja natural.
+`;
+
+    const clientResp = await client.chat.completions.create({
+      model: "llama3-8b-8192",
+      messages: [
+        { role: "system", content: systemClient },
+        { role: "user", content: message }
+      ],
+      temperature: 0.7,
+      max_tokens: 120
+    });
+
+    const clientText = clientResp.choices?.[0]?.message?.content || "Cliente sem resposta.";
+
+    // PROMPT DO CLOSER
+    const systemCloser = `# Instruções para o modelo atuar como CLOSER
     Seu nome é Alecksander, você é um closer brasileiro, especialista em vendas por ligação telefônica.
     # **OS 7 PASSOS — O QUE SÃO E DO QUE SE TRATAM**
 ---
@@ -439,38 +455,29 @@ Acompanhar o cliente durante toda a seleção dos contatos — nada deve ser “
 Reforçar calma, paciência e autoridade.
 Guiar o aluno dentro da plataforma sem pressa e sem abreviar etapas.
 `;
-    // -----------------------------
 
-    // 🔥 CHAMADA AO MODELO
-    const completion = await client.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+    const closerResp = await client.chat.completions.create({
+      model: "llama3-8b-8192",
       messages: [
         { role: "system", content: systemCloser },
-        { role: "user", content: message }
+        { role: "user", content: `Cliente disse: "${clientText}"` }
       ],
-      temperature: 0.2
+      temperature: 0.7,
+      max_tokens: 200
     });
 
-    const raw = completion.choices?.[0]?.message?.content || "";
-    let resposta;
+    const closerText = closerResp.choices?.[0]?.message?.content || "Closer sem resposta.";
 
-    try {
-      resposta = JSON.parse(raw);
-    } catch (e) {
-      console.error("IA retornou texto inválido:", raw);
-      resposta = {
-        closer: { text: "Erro ao gerar resposta do closer." },
-        client: { text: "Erro ao gerar resposta do cliente." }
-      };
-    }
-
-    return res.status(200).json(resposta);
+    return res.status(200).json({
+      client: { text: clientText },
+      closer: { text: closerText }
+    });
 
   } catch (err) {
-    console.error("Erro no servidor IA:", err);
+    console.error("❌ ERRO NO SERVER /api/ia:", err);
     return res.status(500).json({
-      error: "Erro ao processar requisição para IA."
+      error: "Erro interno ao processar IA.",
+      details: err.message
     });
   }
 }
-
