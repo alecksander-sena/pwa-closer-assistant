@@ -1,6 +1,6 @@
 // src/AIChat.tsx
 import { useState, useRef, useEffect } from "react";
-import { enviarMensagemIA } from "./services/ia";
+import enviarMensagemIA from "./services/ia";
 
 export default function AIChat() {
   const [messages, setMessages] = useState<{ author: string; text: string }[]>([]);
