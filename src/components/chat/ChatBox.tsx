@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
-import { enviarMensagemIA } from "../../serviços/ia";
+import { enviarMensagemIA } from "../serviços/ia";
 
 type MsgAuthor = "user" | "client" | "closer" | "system";
 type Msg = { author: MsgAuthor; text: string };
