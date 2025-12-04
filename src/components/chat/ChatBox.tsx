@@ -2,8 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
-import enviarMensagemIA from "../../services/ia";
-
+import { enviarMensagemIA } from "../../services/ia";
 
 type MsgAuthor = "user" | "client" | "closer" | "system";
 type Msg = { author: MsgAuthor; text: string };
@@ -88,4 +87,4 @@ export default function ChatBox() {
       </div>
     </div>
   );
-}
+      }
