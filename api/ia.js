@@ -16,11 +16,19 @@ export default async function handler(req, res) {
     }
 
     const API_KEY = process.env.GROQ_API_KEY;
+    const MODEL = process.env.GROQ_MODEL_CLOSER; // 🔥 AGORA AQUI
 
     if (!API_KEY) {
       console.error("❌ ERRO: GROQ_API_KEY não configurada.");
       return res.status(500).json({
         error: "API Key da IA não configurada no servidor."
+      });
+    }
+
+    if (!MODEL) {
+      console.error("❌ ERRO: GROQ_MODEL_CLOSER não configurado.");
+      return res.status(500).json({
+        error: "Modelo da IA (GROQ_MODEL_CLOSER) não configurado."
       });
     }
 
@@ -33,8 +41,9 @@ Você é um cliente SIMULADO, realista, direto, responde curto,
 Não elogie o vendedor. Seja natural.
 `;
 
+    // 🔥 CLIENTE usando o modelo do ENV
     const clientResp = await client.chat.completions.create({
-      model: "llama3-8b-8192",
+      model: MODEL,
       messages: [
         { role: "system", content: systemClient },
         { role: "user", content: message }
@@ -43,7 +52,8 @@ Não elogie o vendedor. Seja natural.
       max_tokens: 120
     });
 
-    const clientText = clientResp.choices?.[0]?.message?.content || "Cliente sem resposta.";
+    const clientText =
+      clientResp.choices?.[0]?.message?.content || "Cliente sem resposta.";
 
     // PROMPT DO CLOSER
     const systemCloser = `# Instruções para o modelo atuar como CLOSER
@@ -453,11 +463,11 @@ Não reduzir a quantidade de indicações (mínimo 25).
 Sempre pedir o “copiar e colar” para evitar a tag de encaminhamento.
 Acompanhar o cliente durante toda a seleção dos contatos — nada deve ser “depois você faz”.
 Reforçar calma, paciência e autoridade.
-Guiar o aluno dentro da plataforma sem pressa e sem abreviar etapas.
-`;
+Guiar o aluno dentro da plataforma sem pressa e sem abreviar etapas.`;
 
+    // 🔥 CLOSER usando o MESMO modelo do ENV
     const closerResp = await client.chat.completions.create({
-      model: "llama3-8b-8192",
+      model: MODEL,
       messages: [
         { role: "system", content: systemCloser },
         { role: "user", content: `Cliente disse: "${clientText}"` }
@@ -466,7 +476,8 @@ Guiar o aluno dentro da plataforma sem pressa e sem abreviar etapas.
       max_tokens: 200
     });
 
-    const closerText = closerResp.choices?.[0]?.message?.content || "Closer sem resposta.";
+    const closerText =
+      closerResp.choices?.[0]?.message?.content || "Closer sem resposta.";
 
     return res.status(200).json({
       client: { text: clientText },
