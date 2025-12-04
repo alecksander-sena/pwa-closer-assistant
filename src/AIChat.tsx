@@ -1,182 +1,312 @@
 // src/AIChat.tsx
 import { useState, useRef, useEffect } from "react";
 import { enviarMensagemIA } from "./services/ia";
+import { upsertLead, saveMessage } from "./services/firebaseService";
 
 export default function AIChat() {
-  const [messages, setMessages] = useState<{ author: string; text: string }[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [leadName, setLeadName] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadId, setLeadId] = useState<string | null>(null);
 
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [messages, setMessages] = useState<
+    { author: string; text: string }[]
+  >([]);
+
+  const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [input, setInput] = useState("");
+
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Auto-scroll
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   function addMessage(author: string, text: string) {
-    setMessages(prev => [...prev, { author, text }]);
+    setMessages((prev) => [...prev, { author, text }]);
+
+    if (!leadId) return;
+
+    const role =
+      author === "Você"
+        ? "closer"
+        : author === "Cliente"
+        ? "client"
+        : "system";
+
+    saveMessage(leadId, role, text);
+  }
+
+  async function startCall() {
+    if (!leadName.trim() || !leadPhone.trim()) {
+      alert("Preencha nome e telefone antes de iniciar!");
+      return;
+    }
+
+    const id = await upsertLead(null, {
+      name: leadName.trim(),
+      phone: leadPhone.trim(),
+      status: "em_atendimento",
+    });
+
+    setLeadId(id);
+    setStarted(true);
+
+    addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
   }
 
   async function handleSend() {
-    const content = input.trim();
-    if (!content || loading) return;
+    if (!input.trim() || loading || !leadId) return;
 
+    const content = input.trim();
     setInput("");
+
     addMessage("Você", content);
+
     setLoading(true);
 
     try {
-      // Chama IA normalmente
-      const resposta = await enviarMensagemIA(content);
+      const resp = await enviarMensagemIA(content);
 
-      // SOMENTE o closer é exibido agora
-      const closerText = resposta?.closer?.text || "Erro ao gerar resposta do closer.";
-      addMessage("Closer", closerText);
+      const clientText = resp?.client?.text || "";
+      const closerText = resp?.closer?.text || "";
 
-    } catch (err) {
-      console.error("Erro ao chamar IA:", err);
-      addMessage("Erro", "Não foi possível conectar à IA.");
+      if (clientText) addMessage("Cliente", clientText);
+      if (closerText) addMessage("Closer", closerText);
+
+    } catch (e) {
+      console.error(e);
+      addMessage("Erro", "Falha ao conectar à IA.");
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
-
   return (
     <div style={styles.page}>
       <div style={styles.container}>
-        <h2 style={styles.title}>Alecksander Assistente Closer WSP</h2>
 
-        <div style={styles.chatBox}>
-          {messages.map((m, i) => (
-            <div key={i} style={styles.message}>
-              <div style={styles.author}>{m.author}</div>
-              <div style={styles.text}>{m.text}</div>
+        {/* CARD DO LEAD */}
+
+        {!started && (
+          <div style={styles.card}>
+            <h3 style={styles.cardTitle}>Dados do Lead</h3>
+
+            <input
+              style={styles.input}
+              placeholder="📝 Nome do Lead"
+              value={leadName}
+              onChange={(e) => setLeadName(e.target.value)}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="📱 Telefone"
+              value={leadPhone}
+              onChange={(e) => setLeadPhone(e.target.value)}
+            />
+
+            <button style={styles.startBtn} onClick={startCall}>
+              ▶️ Iniciar Ligação
+            </button>
+          </div>
+        )}
+
+        {/* CHAT */}
+
+        {started && (
+          <>
+            <div style={styles.header}>
+              <div>
+                <div style={styles.leadName}>{leadName}</div>
+                <div style={styles.leadPhone}>{leadPhone}</div>
+              </div>
             </div>
-          ))}
 
-          {loading && <div style={styles.typing}>IA digitando…</div>}
-          <div ref={bottomRef} />
-        </div>
+            <div style={styles.chatBox}>
+              {messages.map((m, i) => (
+                <div key={i} style={styles.msgItem}>
+                  <div style={styles.msgAuthor}>{m.author}</div>
+                  <div style={styles.msgBubble}>{m.text}</div>
+                </div>
+              ))}
 
-        <div style={styles.inputRow}>
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Digite o que você diria na ligação…"
-            style={styles.textarea}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
+              {loading && (
+                <div style={styles.typing}>Digitando…</div>
+              )}
 
-          <button
-            onClick={handleSend}
-            style={styles.sendBtn}
-            disabled={loading}
-          >
-            {loading ? "Enviando..." : "Enviar"}
-          </button>
-        </div>
+              <div ref={bottomRef} />
+            </div>
+
+            {/* INPUT DO CHAT */}
+            <div style={styles.inputRow}>
+              <textarea
+                style={styles.textarea}
+                placeholder="Digite o que você diria…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+              />
+
+              <button
+                style={styles.sendBtn}
+                onClick={handleSend}
+                disabled={loading}
+              >
+                Enviar
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
+//
+// ESTILOS (WhatsApp Business + Tech Clean)
+//
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#0f1115",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     padding: 20,
-    color: "#e6eef8",
+    display: "flex",
+    justifyContent: "center",
   },
 
   container: {
     width: "100%",
     maxWidth: 900,
-    borderRadius: 12,
-    padding: 20,
-    background: "linear-gradient(180deg, #0b0c0f 0%, #121416 100%)",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+    background: "#111418",
+    borderRadius: 14,
     border: "1px solid rgba(255,255,255,0.06)",
+    padding: 18,
+    boxShadow: "0 0 20px rgba(0,0,0,0.4)",
   },
 
-  title: {
-    margin: 0,
-    marginBottom: 14,
-    color: "#cfe8ff",
-    fontSize: 24,
-    fontWeight: "800",
-    textShadow: "0 0 6px rgba(80,150,255,0.6)",
+  card: {
+    background: "#14171d",
+    padding: 18,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.05)",
+    marginBottom: 12,
+  },
+
+  cardTitle: {
+    color: "#9ecbff",
+    marginBottom: 12,
+  },
+
+  input: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "#0d1117",
+    color: "#e8f1ff",
+    fontSize: 16,
+  },
+
+  startBtn: {
+    width: "100%",
+    padding: 14,
+    borderRadius: 10,
+    background: "linear-gradient(180deg, #1fa2ff, #1476d3)",
+    color: "white",
+    fontSize: 17,
+    fontWeight: 700,
+    border: "none",
+    cursor: "pointer",
+  },
+
+  header: {
+    paddingBottom: 10,
+    marginBottom: 6,
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  },
+
+  leadName: {
+    color: "#7fb4ff",
+    fontSize: 20,
+    fontWeight: 700,
+  },
+
+  leadPhone: {
+    fontSize: 14,
+    opacity: 0.6,
+    marginTop: 2,
   },
 
   chatBox: {
     maxHeight: 520,
     overflowY: "auto",
     padding: 12,
-    borderRadius: 8,
-    background: "#0b0d11",
-    border: "1px solid rgba(255,255,255,0.03)",
-    marginBottom: 12,
-  },
-
-  message: { marginBottom: 16 },
-
-  author: {
-    fontWeight: "700",
-    color: "#77b4ff",
-    marginBottom: 6,
-    fontSize: 14,
-  },
-
-  text: {
-    background: "rgba(255,255,255,0.08)",
-    padding: 16,
-    borderRadius: 8,
-    lineHeight: 1.55,
-    fontSize: 17, // 🔥 Texto maior e mais confortável
-    color: "#e6eef8",
+    background: "#0d1117",
+    borderRadius: 10,
     border: "1px solid rgba(255,255,255,0.04)",
+  },
+
+  msgItem: {
+    marginBottom: 18,
+  },
+
+  msgAuthor: {
+    fontSize: 13,
+    opacity: 0.7,
+    marginBottom: 6,
+  },
+
+  msgBubble: {
+    padding: 12,
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.05)",
+    color: "#e8f1ff",
+    fontSize: 16,
+    lineHeight: 1.45,
   },
 
   typing: {
     fontStyle: "italic",
-    opacity: 0.7,
-    marginTop: 6,
-    color: "#9fbff8",
+    opacity: 0.6,
+    marginBottom: 8,
   },
 
-  inputRow: { display: "flex", gap: 10, marginTop: 8 },
+  inputRow: {
+    display: "flex",
+    gap: 10,
+    marginTop: 10,
+  },
 
   textarea: {
     flex: 1,
-    minHeight: 72,
+    minHeight: 60,
     padding: 12,
-    borderRadius: 8,
-    border: "1px solid rgba(255,255,255,0.04)",
-    background: "#091014",
-    color: "#e6eef8",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.06)",
+    background: "#0d1117",
+    color: "#fff",
     resize: "vertical",
     fontSize: 15,
-    outline: "none",
   },
 
   sendBtn: {
     minWidth: 110,
+    padding: 12,
+    borderRadius: 10,
     background: "linear-gradient(180deg,#1f8ef1,#165db6)",
     color: "#fff",
-    border: "none",
-    borderRadius: 8,
-    cursor: "pointer",
-    padding: "12px 14px",
     fontWeight: 700,
-    transition: "0.2s",
+    border: "none",
+    cursor: "pointer",
   },
 };
