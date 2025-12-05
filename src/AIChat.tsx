@@ -1,4 +1,3 @@
-// src/AIChat.tsx
 import { useState, useRef, useEffect } from "react";
 import { enviarMensagemIA } from "./services/ia";
 import { upsertLead, saveMessage } from "./services/firebaseService";
@@ -14,18 +13,15 @@ export default function AIChat() {
 
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState(""); // ⚠️ Mensagens rápidas: conectando, erro...
-
+  const [statusMsg, setStatusMsg] = useState("");
   const [input, setInput] = useState("");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Salvar mensagens no chat
   function addMessage(author: string, text: string) {
     setMessages((prev) => [...prev, { author, text }]);
 
@@ -35,13 +31,12 @@ export default function AIChat() {
     }
   }
 
-  // ⭐ EXIBIR STATUS (3 segundos)
   function showStatus(text: string) {
     setStatusMsg(text);
     setTimeout(() => setStatusMsg(""), 2500);
   }
 
-  // ⭐ INICIAR LIGAÇÃO
+  // === INICIAR LIGAÇÃO ===
   async function startCall() {
     if (!leadName.trim() || !leadPhone.trim()) {
       alert("Preencha nome e telefone!");
@@ -61,7 +56,6 @@ export default function AIChat() {
 
     addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
 
-    // ⭐ PRIMEIRO COMANDO PARA IA
     const prompt = `
 Você é um assistente de vendas especialista em planos de saúde.
 Você deve seguir os 7 passos de um roteiro profissional.
@@ -71,10 +65,10 @@ IMPORTANTE:
 - Não gere diálogos.
 - Apenas diga AO CLOSER o que ele deve falar.
 - Foque no próximo passo da venda.
-- Formato da resposta:
 
+RESPONDA SEMPRE NO FORMATO:
 {
-  "closer": { "text": "texto da instrução aqui" }
+  "instruction": "texto da instrução aqui"
 }
 
 Primeiro passo: Apresentação.
@@ -84,11 +78,8 @@ Primeiro passo: Apresentação.
 
     try {
       const resp = await enviarMensagemIA(prompt);
-      const text = resp?.closer?.text || "Erro ao obter instrução.";
-
-      addMessage("Closer", text);
-    } catch (err) {
-      console.error(err);
+      addMessage("Closer", resp.instruction);
+    } catch {
       addMessage("Erro", "Falha ao conectar à IA.");
     }
 
@@ -96,13 +87,12 @@ Primeiro passo: Apresentação.
     showStatus("Conectado ✔️");
   }
 
-  // ⭐ ENVIAR MENSAGEM (continuação do passo)
+  // === ENVIAR CONTINUAÇÃO ===
   async function handleSend() {
     if (!input.trim() || loading || !leadId) return;
 
     const content = input.trim();
     setInput("");
-
     addMessage("Você", content);
 
     setLoading(true);
@@ -111,43 +101,35 @@ Primeiro passo: Apresentação.
       const prompt = `
 O closer disse: "${content}"
 
-Com base nisso, continue APENAS com o próximo passo dos 7 passos da venda.
+Continue com o próximo passo dos 7 passos da venda.
 
 IMPORTANTE:
-- Não simule cliente
-- Não escreva JSON gigante
-- Apenas instrução do próximo passo
+- Não simule cliente.
+- Não gere diálogos.
+- Apenas diga AO CLOSER o que falar.
 
-Formato:
+Formato da resposta:
 {
-  "closer": { "text": "instrução aqui" }
+  "instruction": "instrução aqui"
 }
 `;
 
       const resp = await enviarMensagemIA(prompt);
-      const text = resp?.closer?.text || "Erro ao gerar próxima instrução.";
+      addMessage("Closer", resp.instruction);
 
-      addMessage("Closer", text);
-    } catch (e) {
-      console.error(e);
+    } catch {
       addMessage("Erro", "Falha ao conectar à IA.");
     }
 
     setLoading(false);
   }
 
-  // ---------------------
-  // UI
-  // ---------------------
-
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
-        {/* ⚠️ STATUS TEMPORÁRIO */}
         {statusMsg && <div style={styles.status}>{statusMsg}</div>}
 
-        {/* CARD DO LEAD */}
         {!started && (
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>Dados do Lead</h3>
@@ -172,7 +154,6 @@ Formato:
           </div>
         )}
 
-        {/* CHAT */}
         {started && (
           <>
             <div style={styles.header}>
@@ -188,14 +169,11 @@ Formato:
                 </div>
               ))}
 
-              {loading && (
-                <div style={styles.typing}>Digitando…</div>
-              )}
+              {loading && <div style={styles.typing}>Digitando…</div>}
 
               <div ref={bottomRef} />
             </div>
 
-            {/* INPUT DO CHAT */}
             <div style={styles.inputRow}>
               <textarea
                 style={styles.textarea}
@@ -224,10 +202,6 @@ Formato:
     </div>
   );
 }
-
-// ------------------------
-// ESTILOS
-// ------------------------
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
