@@ -1,6 +1,6 @@
 // /api/ia.js
 import Groq from "groq-sdk";
-import { CONTEXTO_CLOSER } from "../src/data/contexto.js"; // <── IMPORTA O SEU CONTEXTO COMPLETO
+import { CONTEXTO_CLOSER } from "../src/data/contexto.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message } = req.body;
+    const { message, history = [] } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({
@@ -35,10 +35,10 @@ export default async function handler(req, res) {
 
     const client = new Groq({ apiKey: API_KEY });
 
-    // 🎯 SYSTEM PROMPT — agora com TODO seu contexto integrado
+    // PROMPT ajustado: modelo lembra do contexto e responde limpo
     const systemPrompt = `
-Você é ALECKSANDER, um CLOSER PROFISSIONAL BRASILEIRO.
-Você segue EXATAMENTE os 7 PASSOS do método abaixo:
+Você é ALECKSANDER, um CLOSER PROFISSIONAL BRASILEIRO especialista em vendas consultivas.
+Você segue exatamente os 7 PASSOS do método abaixo:
 
 ========================
 ### CONTEXTO DO MÉTODO
@@ -46,33 +46,52 @@ Você segue EXATAMENTE os 7 PASSOS do método abaixo:
 ${CONTEXTO_CLOSER}
 ========================
 
+🎯 OBJETIVO:
+Responder SEMPRE com a frase exata que o vendedor deve dizer AGORA.
+Ajuste a frase de acordo com:
+- o nome do cliente
+- etapas anteriores
+- informações que o cliente já falou
+- dúvidas
+- objeções
+- tom da conversa
+
+🧠 MEMÓRIA DE CONTEXTO:
+Abaixo está um trecho do histórico das mensagens anteriores.  
+Use isso para manter coerência na conversa e adaptar as respostas:
+
+${history.slice(-10).map(h => `• ${h.role}: ${h.content}`).join("\n")}
+
 ⚠️ REGRAS ABSOLUTAS:
-- Você NUNCA gera diálogo.
-- Você NUNCA cria falas do cliente.
-- Você NUNCA retorna JSON.
-- Você NÃO devolve análise longa.
-- Você **só devolve a frase que o vendedor (closer) deve falar AGORA**.
-- A resposta deve ser SEMPRE assim:
-
-📞 Agora diga ao cliente: "…texto…"
-
-Somente isso. Sempre nesse formato. Sem exceções.
+- NÃO gere falas do cliente.
+- NÃO gere diálogos.
+- NÃO gere JSON.
+- NÃO gere longos textos explicativos.
+- A saída deve ser APENAS a frase limpa que o vendedor deve falar AGORA.
+- NÃO usar: “📞”, “Agora diga ao cliente:” ou aspas.
+- Sem emojis.
     `;
 
-    // 🧠 Gera apenas a instrução do closer
     const resposta = await client.chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      temperature: 0.4,
+      temperature: 0.3,
       max_tokens: 200
     });
 
-    const texto =
+    let texto =
       resposta?.choices?.[0]?.message?.content ||
-      "⚠️ Não consegui gerar instrução agora.";
+      "Não consegui gerar instrução agora.";
+
+    // LIMPEZA DA RESPOSTA
+    texto = texto
+      .replace(/📞/g, "")
+      .replace(/Agora diga ao cliente[:,]*/gi, "")
+      .replace(/^["“”]+|["“”]+$/g, "")
+      .trim();
 
     return res.status(200).json({
       instruction: texto
@@ -86,3 +105,4 @@ Somente isso. Sempre nesse formato. Sem exceções.
     });
   }
 }
+  
