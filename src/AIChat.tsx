@@ -15,6 +15,7 @@ export default function AIChat() {
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -32,69 +33,71 @@ export default function AIChat() {
           ? "closer"
           : author === "Cliente"
           ? "client"
+          : author === "Erro"
+          ? "system"
           : "system";
 
       saveMessage(leadId, role, text);
     }
   }
 
-  // 🚀 Função que inicia a ligação de verdade
+  // -------------------------------------------------------
+  // 🚀 Função que inicia a ligação com feedback visual
+  // -------------------------------------------------------
   async function startCall() {
     if (!leadName.trim() || !leadPhone.trim()) {
       alert("Preencha nome e telefone!");
       return;
     }
 
-    // Salva no Firestore
-    const id = await upsertLead(null, {
-      name: leadName.trim(),
-      phone: leadPhone.trim(),
-      status: "em_atendimento",
-    });
-
-    setLeadId(id);
-    setStarted(true);
-
-    // Mensagem inicial
-    addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
-
-    // ENVIO DO CONTEXTO INICIAL PARA IA
-    const promptInicial = `
-Você é um cliente e está atendendo uma ligação do closer Alecksander.
-Seu nome: ${leadName}
-Seu telefone: ${leadPhone}
-
-O closer está ligando para oferecer um plano de saúde.
-Siga o comportamento de um cliente REAL.
-
-- Responda com naturalidade
-- Reaja às perguntas
-- Siga o fluxo de venda
-
-Depois disso, gere também a resposta do CLOSER continuando os 7 passos da venda, SEM ENCERRAR A VENDA.
-
-Formato obrigatório de resposta da IA:
-{
-  "client": { "text": "fala do cliente aqui" },
-  "closer": { "text": "fala estratégica do closer aqui" }
-}
-    `;
-
-    setLoading(true);
     try {
+      setConnecting(true);
+      addMessage("Sistema", "🔄 Iniciando ligação...");
+
+      // Salva no Firestore
+      const id = await upsertLead(null, {
+        name: leadName.trim(),
+        phone: leadPhone.trim(),
+        status: "em_atendimento",
+      });
+
+      setLeadId(id);
+
+      // Aguarda 2s para dar sensação de "conectando"
+      setTimeout(() => {
+        setStarted(true);
+        addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
+      }, 1500);
+
+      // ENVIO DO CONTEXTO INICIAL PARA IA
+      const promptInicial = `
+O cliente chama-se ${leadName}, telefone ${leadPhone}.
+Simule a fala inicial de um cliente ao atender o telefone.
+Depois gere também a fala do closer seguindo os 7 passos.
+
+Formato obrigatório:
+{
+  "client": { "text": "" },
+  "closer": { "text": "" }
+}
+`;
+
       const resp = await enviarMensagemIA(promptInicial);
 
       if (resp?.client?.text) addMessage("Cliente", resp.client.text);
       if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
+
     } catch (err) {
       console.error(err);
-      addMessage("Erro", "Falha ao conectar à IA.");
+      addMessage("Erro", "❌ Não foi possível iniciar a ligação.");
     } finally {
-      setLoading(false);
+      setConnecting(false);
     }
   }
 
-  // Envio de mensagens durante a ligação
+  // -------------------------------------------------------
+  // ✉️ Envio de mensagens durante a ligação
+  // -------------------------------------------------------
   async function handleSend() {
     if (!input.trim() || loading || !leadId) return;
 
@@ -114,7 +117,7 @@ Formato obrigatório de resposta da IA:
       if (closerText) addMessage("Closer", closerText);
     } catch (e) {
       console.error(e);
-      addMessage("Erro", "Falha ao conectar à IA.");
+      addMessage("Erro", "⚠️ Falha ao conectar à IA.");
     } finally {
       setLoading(false);
     }
@@ -143,8 +146,12 @@ Formato obrigatório de resposta da IA:
               onChange={(e) => setLeadPhone(e.target.value)}
             />
 
-            <button style={styles.startBtn} onClick={startCall}>
-              ▶️ Iniciar Ligação
+            <button
+              style={styles.startBtn}
+              onClick={startCall}
+              disabled={connecting}
+            >
+              {connecting ? "🔄 Conectando..." : "▶️ Iniciar Ligação"}
             </button>
           </div>
         )}
@@ -167,14 +174,11 @@ Formato obrigatório de resposta da IA:
                 </div>
               ))}
 
-              {loading && (
-                <div style={styles.typing}>Digitando…</div>
-              )}
+              {loading && <div style={styles.typing}>Digitando…</div>}
 
               <div ref={bottomRef} />
             </div>
 
-            {/* INPUT DO CHAT */}
             <div style={styles.inputRow}>
               <textarea
                 style={styles.textarea}
