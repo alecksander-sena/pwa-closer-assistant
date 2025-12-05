@@ -1,4 +1,3 @@
-// src/components/chat/ChatBox.tsx
 import { useEffect, useRef, useState } from "react";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -9,10 +8,7 @@ type Msg = { author: MsgAuthor; text: string };
 
 export default function ChatBox() {
   const [messages, setMessages] = useState<Msg[]>([
-    {
-      author: "system",
-      text: "Assistente pronto. Digite o que o cliente disse ou sua fala atual."
-    }
+    { author: "system", text: "Assistente pronto. Digite o que o cliente disse ou o que você falou." }
   ]);
 
   const [loading, setLoading] = useState(false);
@@ -26,35 +22,19 @@ export default function ChatBox() {
     const trimmed = msg.trim();
     if (!trimmed) return;
 
-    // mensagem do usuário
     pushMessage({ author: "user", text: trimmed });
 
     setLoading(true);
 
     try {
-      // AGORA RECEBE APENAS { instruction }
       const resp = await enviarMensagemIA(trimmed);
-
-      const instruction =
-        resp?.instruction ||
-        resp?.closer?.text ||
-        "⚠️ IA não retornou instrução.";
-
-      // adiciona APENAS a instrução do closer
-      pushMessage({
-        author: "closer",
-        text: String(instruction)
-      });
+      pushMessage({ author: "closer", text: resp.instruction });
 
     } catch (err) {
-      console.error("Erro ao chamar IA:", err);
-      pushMessage({
-        author: "system",
-        text: "Erro ao conectar com a IA."
-      });
-    } finally {
-      setLoading(false);
+      pushMessage({ author: "system", text: "Erro ao conectar com a IA." });
     }
+
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -64,7 +44,6 @@ export default function ChatBox() {
   return (
     <div className="flex flex-col h-[80vh] bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.04)] rounded-2xl shadow-2xl overflow-hidden backdrop-blur-sm">
 
-      {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-3 border-b border-[rgba(255,255,255,0.03)]
           bg-gradient-to-b from-[rgba(255,255,255,0.02)] to-transparent">
         <div className="flex items-center gap-3">
@@ -78,7 +57,6 @@ export default function ChatBox() {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((m, i) => (
           <ChatMessage key={i} author={m.author} text={m.text} />
@@ -86,7 +64,6 @@ export default function ChatBox() {
         <div ref={listRef} />
       </div>
 
-      {/* Input */}
       <div className="px-4 py-3 border-t border-[rgba(255,255,255,0.03)] bg-[rgba(10,12,16,0.6)]">
         <div className="mb-2 flex items-center gap-3">
           {loading && <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
@@ -100,4 +77,3 @@ export default function ChatBox() {
     </div>
   );
 }
-  
