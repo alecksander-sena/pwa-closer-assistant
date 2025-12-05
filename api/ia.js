@@ -1,5 +1,4 @@
 // /api/ia.js
-import Groq from "groq-sdk";
 import { CONTEXTO_CLOSER } from "../src/data/contexto.js";
 
 export default async function handler(req, res) {
@@ -16,24 +15,22 @@ export default async function handler(req, res) {
       });
     }
 
-    const API_KEY = process.env.GROQ_API_KEY;
-    const MODEL = process.env.GROQ_MODEL_CLOSER;
+    const API_KEY = process.env.HUGGINGFACE_API_KEY;
+    const MODEL = process.env.HUGGINGFACE_MODEL;
 
     if (!API_KEY) {
-      console.error("❌ ERRO: GROQ_API_KEY não configurada.");
+      console.error("❌ ERRO: HUGGINGFACE_API_KEY não configurada.");
       return res.status(500).json({
-        instruction: "Erro: API Key da IA não configurada."
+        instruction: "Erro: HUGGINGFACE_API_KEY não configurada."
       });
     }
 
     if (!MODEL) {
-      console.error("❌ ERRO: GROQ_MODEL_CLOSER não configurado.");
+      console.error("❌ ERRO: HUGGINGFACE_MODEL não configurado.");
       return res.status(500).json({
-        instruction: "Erro: Modelo GROQ_MODEL_CLOSER não configurado."
+        instruction: "Erro: HUGGINGFACE_MODEL não configurado."
       });
     }
-
-    const client = new Groq({ apiKey: API_KEY });
 
     // ============================
     // SYSTEM PROMPT PADRONIZADO
@@ -84,41 +81,50 @@ ${history
 `.trim();
 
     // ============================
-    // CHAMADA AO MODELO
+    // CHAMADA AO HUGGING FACE
     // ============================
-    const resposta = await client.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message }
-      ],
-      temperature: 0.3,
-      max_tokens: 200
-    });
+    const response = await fetch(
+      `https://api-inference.huggingface.co/models/${MODEL}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inputs: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message }
+          ],
+          parameters: {
+            max_new_tokens: 200,
+            temperature: 0.3
+          }
+        })
+      }
+    );
+
+    const data = await response.json();
 
     let texto =
-      resposta?.choices?.[0]?.message?.content?.trim() ??
+      data?.generated_text ??
+      data?.[0]?.generated_text ??
       "Não consegui gerar instrução agora.";
 
-    // ============================
-    // LIMPEZA FINAL
-    // ============================
     texto = texto
       .replace(/📞/gi, "")
       .replace(/Agora diga ao cliente[:,]?/gi, "")
-      .replace(/^["“”]+|["“”]+$/g, "") // remove aspas
-      .replace(/\n+/g, " ") // evita texto quebrado
+      .replace(/^["“”]+|["“”]+$/g, "")
+      .replace(/\n+/g, " ")
       .trim();
 
     return res.status(200).json({
       instruction: texto
     });
-
   } catch (err) {
-    console.error("❌ ERRO NO /api/ia.js:", err);
-
+    console.error("❌ ERRO NO /api/ia:", err);
     return res.status(500).json({
       instruction: "❌ Erro interno ao processar instrução."
     });
   }
-}
+      }
