@@ -14,84 +14,89 @@ export default function AIChat() {
 
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [statusMsg, setStatusMsg] = useState(""); // ⚠️ Mensagens rápidas: conectando, erro...
+
   const [input, setInput] = useState("");
-  const [statusMsg, setStatusMsg] = useState("");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll
+  // Auto scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Salvar mensagens no chat
   function addMessage(author: string, text: string) {
     setMessages((prev) => [...prev, { author, text }]);
 
-    if (!leadId) return;
-
-    const role =
-      author === "Você"
-        ? "closer"
-        : author === "Cliente"
-        ? "client"
-        : "system";
-
-    saveMessage(leadId, role, text);
+    if (leadId) {
+      const role = author === "Você" ? "closer" : "system";
+      saveMessage(leadId, role, text);
+    }
   }
 
-  // === INICIAR LIGAÇÃO ===
+  // ⭐ EXIBIR STATUS (3 segundos)
+  function showStatus(text: string) {
+    setStatusMsg(text);
+    setTimeout(() => setStatusMsg(""), 2500);
+  }
+
+  // ⭐ INICIAR LIGAÇÃO
   async function startCall() {
     if (!leadName.trim() || !leadPhone.trim()) {
       alert("Preencha nome e telefone!");
       return;
     }
 
-    try {
-      setStatusMsg("Conectando...");
-      
-      const id = await upsertLead(null, {
-        name: leadName.trim(),
-        phone: leadPhone.trim(),
-        status: "em_atendimento",
-      });
+    showStatus("📞 Conectando...");
 
-      setLeadId(id);
-      setStarted(true);
+    const id = await upsertLead(null, {
+      name: leadName.trim(),
+      phone: leadPhone.trim(),
+      status: "em_atendimento",
+    });
 
-      setStatusMsg("Ligação iniciada!");
-      setTimeout(() => setStatusMsg(""), 2000);
+    setLeadId(id);
+    setStarted(true);
 
-      addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
+    addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
 
-      const promptInicial = `
-Você é um cliente real atendendo uma ligação do closer Alecksander.
-Seu nome: ${leadName}
-Seu telefone: ${leadPhone}
+    // ⭐ PRIMEIRO COMANDO PARA IA
+    const prompt = `
+Você é um assistente de vendas especialista em planos de saúde.
+Você deve seguir os 7 passos de um roteiro profissional.
 
-Siga comportamento natural de cliente.
-A IA deve responder no formato:
+IMPORTANTE:
+- Não simule cliente.
+- Não gere diálogos.
+- Apenas diga AO CLOSER o que ele deve falar.
+- Foque no próximo passo da venda.
+- Formato da resposta:
+
 {
-  "client": { "text": "... cliente ..." },
-  "closer": { "text": "... closer ..." }
+  "closer": { "text": "texto da instrução aqui" }
 }
-      `;
 
-      setLoading(true);
-      const resp = await enviarMensagemIA(promptInicial);
+Primeiro passo: Apresentação.
+`;
 
-      if (resp?.client?.text) addMessage("Cliente", resp.client.text);
-      if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
+    setLoading(true);
 
-    } catch (error) {
-      console.error("Erro ao iniciar ligação:", error);
-      setStatusMsg("❌ Falha ao conectar.");
-      setTimeout(() => setStatusMsg(""), 2500);
-    } finally {
-      setLoading(false);
+    try {
+      const resp = await enviarMensagemIA(prompt);
+      const text = resp?.closer?.text || "Erro ao obter instrução.";
+
+      addMessage("Closer", text);
+    } catch (err) {
+      console.error(err);
+      addMessage("Erro", "Falha ao conectar à IA.");
     }
+
+    setLoading(false);
+    showStatus("Conectado ✔️");
   }
 
-  // === ENVIAR MENSAGEM ===
+  // ⭐ ENVIAR MENSAGEM (continuação do passo)
   async function handleSend() {
     if (!input.trim() || loading || !leadId) return;
 
@@ -99,27 +104,47 @@ A IA deve responder no formato:
     setInput("");
 
     addMessage("Você", content);
+
     setLoading(true);
 
     try {
-      const resp = await enviarMensagemIA(content);
+      const prompt = `
+O closer disse: "${content}"
 
-      if (resp?.client?.text) addMessage("Cliente", resp.client.text);
-      if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
+Com base nisso, continue APENAS com o próximo passo dos 7 passos da venda.
 
-    } catch (error) {
-      console.error(error);
-      addMessage("Erro", "⚠️ Falha ao conectar à IA.");
-    } finally {
-      setLoading(false);
+IMPORTANTE:
+- Não simule cliente
+- Não escreva JSON gigante
+- Apenas instrução do próximo passo
+
+Formato:
+{
+  "closer": { "text": "instrução aqui" }
+}
+`;
+
+      const resp = await enviarMensagemIA(prompt);
+      const text = resp?.closer?.text || "Erro ao gerar próxima instrução.";
+
+      addMessage("Closer", text);
+    } catch (e) {
+      console.error(e);
+      addMessage("Erro", "Falha ao conectar à IA.");
     }
+
+    setLoading(false);
   }
+
+  // ---------------------
+  // UI
+  // ---------------------
 
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
-        {/* STATUS */}
+        {/* ⚠️ STATUS TEMPORÁRIO */}
         {statusMsg && <div style={styles.status}>{statusMsg}</div>}
 
         {/* CARD DO LEAD */}
@@ -151,10 +176,8 @@ A IA deve responder no formato:
         {started && (
           <>
             <div style={styles.header}>
-              <div>
-                <div style={styles.leadName}>{leadName}</div>
-                <div style={styles.leadPhone}>{leadPhone}</div>
-              </div>
+              <div style={styles.leadName}>{leadName}</div>
+              <div style={styles.leadPhone}>{leadPhone}</div>
             </div>
 
             <div style={styles.chatBox}>
@@ -172,11 +195,12 @@ A IA deve responder no formato:
               <div ref={bottomRef} />
             </div>
 
+            {/* INPUT DO CHAT */}
             <div style={styles.inputRow}>
               <textarea
                 style={styles.textarea}
-                value={input}
                 placeholder="Digite o que você diria…"
+                value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -201,20 +225,11 @@ A IA deve responder no formato:
   );
 }
 
-//
+// ------------------------
 // ESTILOS
-//
-const styles: Record<string, React.CSSProperties> = {
-  status: {
-    background: "#1e84ff",
-    color: "white",
-    padding: "10px 16px",
-    textAlign: "center",
-    borderRadius: 8,
-    fontWeight: 600,
-    marginBottom: 10,
-  },
+// ------------------------
 
+const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
     background: "#0f1115",
@@ -228,9 +243,18 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 900,
     background: "#111418",
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.06)",
     padding: 18,
-    boxShadow: "0 0 20px rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
+
+  status: {
+    background: "#1d7bff",
+    padding: 10,
+    borderRadius: 8,
+    color: "white",
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 12,
   },
 
   card: {
@@ -251,7 +275,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 12,
     borderRadius: 8,
     marginBottom: 10,
-    border: "1px solid rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
     background: "#0d1117",
     color: "#e8f1ff",
     fontSize: 16,
@@ -282,9 +306,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   leadPhone: {
+    color: "#aaa",
     fontSize: 14,
-    opacity: 0.6,
-    marginTop: 2,
   },
 
   chatBox: {
@@ -303,17 +326,15 @@ const styles: Record<string, React.CSSProperties> = {
   msgAuthor: {
     fontSize: 13,
     opacity: 0.7,
-    marginBottom: 6,
   },
 
   msgBubble: {
     padding: 12,
     borderRadius: 10,
     background: "rgba(255,255,255,0.08)",
-    border: "1px solid rgba(255,255,255,0.05)",
-    color: "#e8f1ff",
     fontSize: 16,
     lineHeight: 1.45,
+    color: "#e8f1ff",
   },
 
   typing: {
@@ -333,11 +354,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: 60,
     padding: 12,
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.06)",
     background: "#0d1117",
     color: "#fff",
-    resize: "vertical",
     fontSize: 15,
+    resize: "vertical",
   },
 
   sendBtn: {
@@ -351,4 +371,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
 };
-                      
+  
