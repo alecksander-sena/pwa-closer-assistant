@@ -3,7 +3,7 @@ export interface IAResposta {
   instruction: string;
 }
 
-// === Função para evitar erros se vier algo inesperado ===
+// === Função segura ===
 const safe = (txt: unknown): string => {
   if (typeof txt === "string" && txt.trim() !== "") return txt;
   return "Resposta indisponível.";
@@ -26,26 +26,22 @@ export async function enviarMensagemIA(message: string): Promise<IAResposta> {
 
     if (!res.ok) {
       console.error("Erro ao chamar IA:", res.status);
-      return { instruction: "⚠️ Erro ao gerar instrução da IA." };
+      return { instruction: "Erro ao gerar instrução da IA." };
     }
 
     const data = await res.json().catch(() => null);
 
     return {
-      instruction: safe(
-        data?.instruction ||
-        data?.closer?.text ||
-        data?.text
-      )
+      instruction: safe(data?.instruction)
     };
 
   } catch (err: any) {
     clearTimeout(timeout);
 
     if (err.name === "AbortError") {
-      return { instruction: "⏳ A IA demorou para responder." };
+      return { instruction: "A IA demorou para responder." };
     }
 
-    return { instruction: "❌ Erro de conexão com o servidor." };
+    return { instruction: "Erro de conexão com o servidor." };
   }
 }
