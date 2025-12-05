@@ -15,11 +15,11 @@ export default function AIChat() {
   const [started, setStarted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [input, setInput] = useState("");
-  const [connecting, setConnecting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState("");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto scroll
+  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -27,23 +27,19 @@ export default function AIChat() {
   function addMessage(author: string, text: string) {
     setMessages((prev) => [...prev, { author, text }]);
 
-    if (leadId) {
-      const role =
-        author === "Você"
-          ? "closer"
-          : author === "Cliente"
-          ? "client"
-          : author === "Erro"
-          ? "system"
-          : "system";
+    if (!leadId) return;
 
-      saveMessage(leadId, role, text);
-    }
+    const role =
+      author === "Você"
+        ? "closer"
+        : author === "Cliente"
+        ? "client"
+        : "system";
+
+    saveMessage(leadId, role, text);
   }
 
-  // -------------------------------------------------------
-  // 🚀 Função que inicia a ligação com feedback visual
-  // -------------------------------------------------------
+  // === INICIAR LIGAÇÃO ===
   async function startCall() {
     if (!leadName.trim() || !leadPhone.trim()) {
       alert("Preencha nome e telefone!");
@@ -51,10 +47,8 @@ export default function AIChat() {
     }
 
     try {
-      setConnecting(true);
-      addMessage("Sistema", "🔄 Iniciando ligação...");
-
-      // Salva no Firestore
+      setStatusMsg("Conectando...");
+      
       const id = await upsertLead(null, {
         name: leadName.trim(),
         phone: leadPhone.trim(),
@@ -62,42 +56,42 @@ export default function AIChat() {
       });
 
       setLeadId(id);
+      setStarted(true);
 
-      // Aguarda 2s para dar sensação de "conectando"
-      setTimeout(() => {
-        setStarted(true);
-        addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
-      }, 1500);
+      setStatusMsg("Ligação iniciada!");
+      setTimeout(() => setStatusMsg(""), 2000);
 
-      // ENVIO DO CONTEXTO INICIAL PARA IA
+      addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
+
       const promptInicial = `
-O cliente chama-se ${leadName}, telefone ${leadPhone}.
-Simule a fala inicial de um cliente ao atender o telefone.
-Depois gere também a fala do closer seguindo os 7 passos.
+Você é um cliente real atendendo uma ligação do closer Alecksander.
+Seu nome: ${leadName}
+Seu telefone: ${leadPhone}
 
-Formato obrigatório:
+Siga comportamento natural de cliente.
+A IA deve responder no formato:
 {
-  "client": { "text": "" },
-  "closer": { "text": "" }
+  "client": { "text": "... cliente ..." },
+  "closer": { "text": "... closer ..." }
 }
-`;
+      `;
 
+      setLoading(true);
       const resp = await enviarMensagemIA(promptInicial);
 
       if (resp?.client?.text) addMessage("Cliente", resp.client.text);
       if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
 
-    } catch (err) {
-      console.error(err);
-      addMessage("Erro", "❌ Não foi possível iniciar a ligação.");
+    } catch (error) {
+      console.error("Erro ao iniciar ligação:", error);
+      setStatusMsg("❌ Falha ao conectar.");
+      setTimeout(() => setStatusMsg(""), 2500);
     } finally {
-      setConnecting(false);
+      setLoading(false);
     }
   }
 
-  // -------------------------------------------------------
-  // ✉️ Envio de mensagens durante a ligação
-  // -------------------------------------------------------
+  // === ENVIAR MENSAGEM ===
   async function handleSend() {
     if (!input.trim() || loading || !leadId) return;
 
@@ -110,13 +104,11 @@ Formato obrigatório:
     try {
       const resp = await enviarMensagemIA(content);
 
-      const clientText = resp?.client?.text;
-      const closerText = resp?.closer?.text;
+      if (resp?.client?.text) addMessage("Cliente", resp.client.text);
+      if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
 
-      if (clientText) addMessage("Cliente", clientText);
-      if (closerText) addMessage("Closer", closerText);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       addMessage("Erro", "⚠️ Falha ao conectar à IA.");
     } finally {
       setLoading(false);
@@ -126,6 +118,9 @@ Formato obrigatório:
   return (
     <div style={styles.page}>
       <div style={styles.container}>
+
+        {/* STATUS */}
+        {statusMsg && <div style={styles.status}>{statusMsg}</div>}
 
         {/* CARD DO LEAD */}
         {!started && (
@@ -146,12 +141,8 @@ Formato obrigatório:
               onChange={(e) => setLeadPhone(e.target.value)}
             />
 
-            <button
-              style={styles.startBtn}
-              onClick={startCall}
-              disabled={connecting}
-            >
-              {connecting ? "🔄 Conectando..." : "▶️ Iniciar Ligação"}
+            <button style={styles.startBtn} onClick={startCall}>
+              ▶️ Iniciar Ligação
             </button>
           </div>
         )}
@@ -174,7 +165,9 @@ Formato obrigatório:
                 </div>
               ))}
 
-              {loading && <div style={styles.typing}>Digitando…</div>}
+              {loading && (
+                <div style={styles.typing}>Digitando…</div>
+              )}
 
               <div ref={bottomRef} />
             </div>
@@ -182,8 +175,8 @@ Formato obrigatório:
             <div style={styles.inputRow}>
               <textarea
                 style={styles.textarea}
-                placeholder="Digite o que você diria…"
                 value={input}
+                placeholder="Digite o que você diria…"
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -211,8 +204,17 @@ Formato obrigatório:
 //
 // ESTILOS
 //
-
 const styles: Record<string, React.CSSProperties> = {
+  status: {
+    background: "#1e84ff",
+    color: "white",
+    padding: "10px 16px",
+    textAlign: "center",
+    borderRadius: 8,
+    fontWeight: 600,
+    marginBottom: 10,
+  },
+
   page: {
     minHeight: "100vh",
     background: "#0f1115",
@@ -349,4 +351,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
 };
-    
+                      
