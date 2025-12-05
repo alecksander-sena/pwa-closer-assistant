@@ -2,13 +2,12 @@
   "version": 2,
   "functions": {
     "api/ia.js": {
-      "runtime": "vercel-node@3.0.0"
+      "runtime": "nodejs18.x"
     }
   },
   "routes": [
     {
       "src": "/api/ia",
-      "methods": ["POST"],
       "dest": "/api/ia.js"
     }
   ]
