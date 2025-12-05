@@ -1,11 +1,10 @@
-// Tipagem das respostas da IA
+// === Resposta da IA corrigida: sempre retorna SOMENTE o texto do CLOSER ===
 export interface IAResposta {
-  closer: { text: string };
-  client: { text: string };
+  text: string;   // apenas UMA resposta
 }
 
 /**
- * Função segura para garantir que sempre retorne texto válido
+ * Garante que nunca quebre o app caso venha algo inesperado
  */
 const safe = (txt: unknown): string => {
   if (typeof txt === "string" && txt.trim() !== "") return txt;
@@ -14,10 +13,10 @@ const safe = (txt: unknown): string => {
 
 /**
  * Envia uma mensagem ao backend /api/ia
- * com timeout, validação e fallback automático.
+ * e retorna apenas uma instrução para o closer
  */
 export async function enviarMensagemIA(message: string): Promise<IAResposta> {
-  // Timeout de 12 segundos
+  // timeout de 12s
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
 
@@ -34,43 +33,29 @@ export async function enviarMensagemIA(message: string): Promise<IAResposta> {
     if (!res.ok) {
       const errText = await res.text();
       console.error("Erro ao chamar IA:", res.status, errText);
-
-      return {
-        closer: { text: "Erro ao gerar resposta do closer." },
-        client: { text: "Erro ao gerar resposta do cliente." }
-      };
+      return { text: "⚠️ Erro ao gerar instrução da IA." };
     }
 
     const data = await res.json().catch(() => {
-      console.error("Erro ao interpretar JSON da IA");
+      console.error("Erro ao interpretar JSON");
       return null;
     });
 
+    // === AQUI ESTÁ A CORREÇÃO PRINCIPAL ===
+    // A IA agora retorna APENAS UMA MENSAGEM
     return {
-      closer: {
-        text: safe(data?.closer?.text)
-      },
-      client: {
-        text: safe(data?.client?.text)
-      }
+      text: safe(data?.instruction || data?.closer?.text)
     };
 
   } catch (err: any) {
     clearTimeout(timeout);
 
     if (err.name === "AbortError") {
-      console.error("Timeout: Servidor demorou demais.");
-      return {
-        closer: { text: "O servidor demorou para responder." },
-        client: { text: "O servidor demorou para responder." }
-      };
+      console.error("Timeout da IA.");
+      return { text: "⏳ A IA demorou para responder." };
     }
 
     console.error("Falha de conexão:", err);
-
-    return {
-      closer: { text: "Erro de conexão com o servidor." },
-      client: { text: "Erro de conexão com o servidor." }
-    };
+    return { text: "❌ Erro de conexão com o servidor." };
   }
 }
