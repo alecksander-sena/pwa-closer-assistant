@@ -1,5 +1,6 @@
-// api/ia.js
+// /api/ia.js
 import Groq from "groq-sdk";
+import { CONTEXTO_CLOSER } from "../src/data/contexto.js"; // <── IMPORTA O SEU CONTEXTO COMPLETO
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -21,70 +22,67 @@ export default async function handler(req, res) {
     if (!API_KEY) {
       console.error("❌ ERRO: GROQ_API_KEY não configurada.");
       return res.status(500).json({
-        error: "API Key da IA não configurada no servidor."
+        instruction: "Erro: API Key da IA não configurada."
       });
     }
 
     if (!MODEL) {
       console.error("❌ ERRO: GROQ_MODEL_CLOSER não configurado.");
       return res.status(500).json({
-        error: "Modelo GROQ_MODEL_CLOSER não configurado."
+        instruction: "Erro: Modelo GROQ_MODEL_CLOSER não configurado."
       });
     }
 
     const client = new Groq({ apiKey: API_KEY });
 
-    // 🧠 PROMPT QUE GERA APENAS A ORIENTAÇÃO DO CLOSER
+    // 🎯 SYSTEM PROMPT — agora com TODO seu contexto integrado
     const systemPrompt = `
-Você é um assistente de vendas (CLOSER) brasileiro extremamente experiente.
-Sua função é orientar o vendedor exatamente sobre o que deve FALAR AGORA.
+Você é ALECKSANDER, um CLOSER PROFISSIONAL BRASILEIRO.
+Você segue EXATAMENTE os 7 PASSOS do método abaixo:
 
-⚠️ IMPORTANTE:
-- Não gere diálogos completos.
-- Não gere JSON.
-- Não simule cliente falando.
-- Apenas diga ao vendedor O QUE FALAR.
-- Responda sempre curto, direto e objetivo.
-- Sempre baseado nos 7 passos fornecidos.
-- O texto deve ser pronto para copiar e falar em uma ligação real.
+========================
+### CONTEXTO DO MÉTODO
+========================
+${CONTEXTO_CLOSER}
+========================
 
-O usuário irá te mandar:
-- O nome do lead
-- O que o cliente disse
-- Ou a etapa em que está
+⚠️ REGRAS ABSOLUTAS:
+- Você NUNCA gera diálogo.
+- Você NUNCA cria falas do cliente.
+- Você NUNCA retorna JSON.
+- Você NÃO devolve análise longa.
+- Você **só devolve a frase que o vendedor (closer) deve falar AGORA**.
+- A resposta deve ser SEMPRE assim:
 
-Você retorna APENAS uma instrução clara, assim:
+📞 Agora diga ao cliente: "…texto…"
 
-"📞 Agora diga ao cliente: '...texto...' "
-
-Nada além disso.
+Somente isso. Sempre nesse formato. Sem exceções.
     `;
 
-    // 🔥 GERA APENAS A INSTRUÇÃO DA PRÓXIMA FALA
+    // 🧠 Gera apenas a instrução do closer
     const resposta = await client.chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      temperature: 0.7,
-      max_tokens: 180
+      temperature: 0.4,
+      max_tokens: 200
     });
 
     const texto =
-      resposta.choices?.[0]?.message?.content ||
-      "⚠️ Não consegui gerar instrução.";
+      resposta?.choices?.[0]?.message?.content ||
+      "⚠️ Não consegui gerar instrução agora.";
 
     return res.status(200).json({
       instruction: texto
     });
 
   } catch (err) {
-    console.error("❌ ERRO NO SERVER /api/ia:", err);
+    console.error("❌ ERRO NO /api/ia.js:", err);
+
     return res.status(500).json({
-      error: "Erro interno ao processar IA.",
-      details: err.message
+      instruction: "❌ Erro interno ao processar instrução."
     });
   }
 }
-  
