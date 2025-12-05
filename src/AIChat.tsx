@@ -18,7 +18,7 @@ export default function AIChat() {
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll
+  // Auto scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -26,24 +26,26 @@ export default function AIChat() {
   function addMessage(author: string, text: string) {
     setMessages((prev) => [...prev, { author, text }]);
 
-    if (!leadId) return;
+    if (leadId) {
+      const role =
+        author === "Você"
+          ? "closer"
+          : author === "Cliente"
+          ? "client"
+          : "system";
 
-    const role =
-      author === "Você"
-        ? "closer"
-        : author === "Cliente"
-        ? "client"
-        : "system";
-
-    saveMessage(leadId, role, text);
+      saveMessage(leadId, role, text);
+    }
   }
 
+  // 🚀 Função que inicia a ligação de verdade
   async function startCall() {
     if (!leadName.trim() || !leadPhone.trim()) {
-      alert("Preencha nome e telefone antes de iniciar!");
+      alert("Preencha nome e telefone!");
       return;
     }
 
+    // Salva no Firestore
     const id = await upsertLead(null, {
       name: leadName.trim(),
       phone: leadPhone.trim(),
@@ -53,9 +55,46 @@ export default function AIChat() {
     setLeadId(id);
     setStarted(true);
 
+    // Mensagem inicial
     addMessage("Sistema", `📞 Ligação iniciada com ${leadName}.`);
+
+    // ENVIO DO CONTEXTO INICIAL PARA IA
+    const promptInicial = `
+Você é um cliente e está atendendo uma ligação do closer Alecksander.
+Seu nome: ${leadName}
+Seu telefone: ${leadPhone}
+
+O closer está ligando para oferecer um plano de saúde.
+Siga o comportamento de um cliente REAL.
+
+- Responda com naturalidade
+- Reaja às perguntas
+- Siga o fluxo de venda
+
+Depois disso, gere também a resposta do CLOSER continuando os 7 passos da venda, SEM ENCERRAR A VENDA.
+
+Formato obrigatório de resposta da IA:
+{
+  "client": { "text": "fala do cliente aqui" },
+  "closer": { "text": "fala estratégica do closer aqui" }
+}
+    `;
+
+    setLoading(true);
+    try {
+      const resp = await enviarMensagemIA(promptInicial);
+
+      if (resp?.client?.text) addMessage("Cliente", resp.client.text);
+      if (resp?.closer?.text) addMessage("Closer", resp.closer.text);
+    } catch (err) {
+      console.error(err);
+      addMessage("Erro", "Falha ao conectar à IA.");
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // Envio de mensagens durante a ligação
   async function handleSend() {
     if (!input.trim() || loading || !leadId) return;
 
@@ -63,18 +102,16 @@ export default function AIChat() {
     setInput("");
 
     addMessage("Você", content);
-
     setLoading(true);
 
     try {
       const resp = await enviarMensagemIA(content);
 
-      const clientText = resp?.client?.text || "";
-      const closerText = resp?.closer?.text || "";
+      const clientText = resp?.client?.text;
+      const closerText = resp?.closer?.text;
 
       if (clientText) addMessage("Cliente", clientText);
       if (closerText) addMessage("Closer", closerText);
-
     } catch (e) {
       console.error(e);
       addMessage("Erro", "Falha ao conectar à IA.");
@@ -88,7 +125,6 @@ export default function AIChat() {
       <div style={styles.container}>
 
         {/* CARD DO LEAD */}
-
         {!started && (
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>Dados do Lead</h3>
@@ -114,7 +150,6 @@ export default function AIChat() {
         )}
 
         {/* CHAT */}
-
         {started && (
           <>
             <div style={styles.header}>
@@ -170,7 +205,7 @@ export default function AIChat() {
 }
 
 //
-// ESTILOS (WhatsApp Business + Tech Clean)
+// ESTILOS
 //
 
 const styles: Record<string, React.CSSProperties> = {
@@ -310,3 +345,4 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
 };
+    
