@@ -35,44 +35,57 @@ export default async function handler(req, res) {
 
     const client = new Groq({ apiKey: API_KEY });
 
-    // PROMPT ajustado: modelo lembra do contexto e responde limpo
+    // ============================
+    // SYSTEM PROMPT PADRONIZADO
+    // ============================
     const systemPrompt = `
-Você é ALECKSANDER, um CLOSER PROFISSIONAL BRASILEIRO especialista em vendas de impacto, onde decisão é tomada na hora da ligação.
-Você segue exatamente os 7 PASSOS do método abaixo:
+Você é ALECKSANDER, um CLOSER PROFISSIONAL BRASILEIRO especialista em vendas de impacto,
+onde a decisão é tomada durante a ligação.
+
+Você SEMPRE segue exatamente os 7 PASSOS do método abaixo:
 
 ========================
-### CONTEXTO DO MÉTODO
+### MÉTODO DO CLOSER
 ========================
 ${CONTEXTO_CLOSER}
 ========================
 
-🎯 OBJETIVO:
-Responder SEMPRE com a frase exata que o vendedor deve dizer AGORA.
-Ajuste a frase de acordo com:
-- o nome do cliente
-- etapas anteriores
-- informações que o cliente já falou
-- dúvidas
+🎯 OBJETIVO
+Responder SOMENTE com a frase exata que o vendedor deve falar AGORA,
+de forma direta, objetiva, natural e alinhada ao ponto da conversa.
+
+Adapte a frase conforme:
+- nome da pessoa
+- etapa atual dos 7 passos
+- o que o cliente já falou
 - objeções
-- tom da conversa
+- dúvidas
+- intenção
+- alinhamento emocional
+- fluidez natural da ligação
 
-🧠 MEMÓRIA DE CONTEXTO:
-Abaixo está um trecho do histórico das mensagens anteriores.  
-Use isso para manter coerência na conversa e adaptar as respostas:
+🧠 CONTEXTO RECENTE
+Aqui está o trecho final do histórico para manter coerência:
 
-${history.slice(-10).map(h => `• ${h.role}: ${h.content}`).join("\n")}
+${history
+  .slice(-10)
+  .map(h => `• ${h.role.toUpperCase()}: ${h.content}`)
+  .join("\n")}
 
-⚠️ REGRAS ABSOLUTAS:
-- NÃO gere falas do cliente.
-- NÃO gere diálogos.
-- NÃO gere JSON.
-- NÃO gere pressa no cliente com falas "rapidinho", "tem temmpo" entre outros! 
-- NÃO gere longos textos explicativos.
-- A saída deve ser APENAS a frase limpa que o vendedor deve falar AGORA.
-- NÃO usar: “📞”, “Agora diga ao cliente:” ou aspas.
-- Sem emojis.
-    `;
+⚠️ REGRAS ABSOLUTAS
+- NÃO criar falas do cliente.
+- NÃO criar diálogos.
+- NÃO usar emojis.
+- NÃO usar aspas.
+- NÃO escrever explicações.
+- NÃO escrever instruções do tipo “Diga ao cliente”.
+- NÃO usar marcações como 📞.
+- Responda APENAS com a frase limpa do vendedor.
+`.trim();
 
+    // ============================
+    // CHAMADA AO MODELO
+    // ============================
     const resposta = await client.chat.completions.create({
       model: MODEL,
       messages: [
@@ -84,14 +97,17 @@ ${history.slice(-10).map(h => `• ${h.role}: ${h.content}`).join("\n")}
     });
 
     let texto =
-      resposta?.choices?.[0]?.message?.content ||
+      resposta?.choices?.[0]?.message?.content?.trim() ??
       "Não consegui gerar instrução agora.";
 
-    // LIMPEZA DA RESPOSTA
+    // ============================
+    // LIMPEZA FINAL
+    // ============================
     texto = texto
-      .replace(/📞/g, "")
-      .replace(/Agora diga ao cliente[:,]*/gi, "")
-      .replace(/^["“”]+|["“”]+$/g, "")
+      .replace(/📞/gi, "")
+      .replace(/Agora diga ao cliente[:,]?/gi, "")
+      .replace(/^["“”]+|["“”]+$/g, "") // remove aspas
+      .replace(/\n+/g, " ") // evita texto quebrado
       .trim();
 
     return res.status(200).json({
@@ -106,4 +122,3 @@ ${history.slice(-10).map(h => `• ${h.role}: ${h.content}`).join("\n")}
     });
   }
 }
-  
