@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "functions": {
+    "api/ia.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/ia",
+      "methods": ["POST"],
+      "dest": "/api/ia.js"
+    }
+  ]
+}
